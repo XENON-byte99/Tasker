@@ -210,7 +210,7 @@ fun TodoScreen(nav: NavController) {
                 SectionCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(main.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { scope.launch { app.repo.deleteTaskCategory(main) } }) { Text("Delete") }
+                        ConfirmButton("Delete", "Delete the category \"${main.name}\"? Its tasks are kept without a category.") { scope.launch { app.repo.deleteTaskCategory(main) } }
                     }
                     open.filter { it.categoryId == main.id }.forEach { TaskRow(it, "", nav) }
                     cats.filter { it.parentId == main.id }.forEach { sub ->
@@ -218,7 +218,7 @@ fun TodoScreen(nav: NavController) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val n = open.count { it.categoryId == sub.id }
                             Text("${sub.name.uppercase()} · $n", style = MaterialTheme.typography.labelMedium, color = Muted, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { scope.launch { app.repo.deleteTaskCategory(sub) } }) { Text("Delete") }
+                            ConfirmButton("Delete", "Delete the sub-category \"${sub.name}\"? Its tasks are kept without a category.") { scope.launch { app.repo.deleteTaskCategory(sub) } }
                         }
                         open.filter { it.categoryId == sub.id }.forEach { TaskRow(it, "", nav) }
                     }
@@ -337,8 +337,8 @@ fun TaskEditScreen(nav: NavController, id: Long) {
         ) { Text("Save") }
 
         existing?.let { t ->
-            OutlinedButton(onClick = { scope.launch { app.repo.deleteTask(t); nav.popBackStack() } }, modifier = Modifier.fillMaxWidth()) {
-                Text("Delete task", color = Warn)
+            ConfirmButton("Delete task", "Delete \"${t.title}\"? This cannot be undone.", Modifier.fillMaxWidth(), outlined = true) {
+                scope.launch { app.repo.deleteTask(t); nav.popBackStack() }
             }
         }
     }

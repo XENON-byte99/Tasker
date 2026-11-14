@@ -98,7 +98,7 @@ private fun ExpensesTab(nav: NavController) {
                     money(t.amount),
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = { scope.launch { app.dao.deleteTxn(t) } }) { Text("Delete") }
+                ConfirmButton("Delete", "Delete this expense of ${money(t.amount)}? This cannot be undone.") { scope.launch { app.dao.deleteTxn(t) } }
             }
         }
     }

@@ -358,10 +358,11 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
         ) { Text("Save") }
 
         existing?.let { t ->
-            OutlinedButton(
-                onClick = { scope.launch { app.repo.archiveTuition(t); nav.popBackStack("schedule", false) } },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Stop this tuition (history is kept)", color = Warn) }
+            ConfirmButton(
+                "Stop this tuition (history is kept)",
+                "Stop the tuition \"${t.name}\"? It leaves your list and stops reminding you. Past days and income are kept.",
+                Modifier.fillMaxWidth(), outlined = true, confirmLabel = "Stop tuition",
+            ) { scope.launch { app.repo.archiveTuition(t); nav.popBackStack("schedule", false) } }
         }
     }
 }
@@ -522,9 +523,11 @@ fun CourseEditScreen(nav: NavController, id: Long) {
         ) { Text("Save") }
 
         existing?.let { c ->
-            OutlinedButton(onClick = { scope.launch { app.repo.deleteCourse(c); nav.popBackStack() } }, modifier = Modifier.fillMaxWidth()) {
-                Text("Delete course and its history", color = Warn)
-            }
+            ConfirmButton(
+                "Delete course and its history",
+                "Delete \"${c.code}\" with all its class times, attendance and notes? This cannot be undone.",
+                Modifier.fillMaxWidth(), outlined = true,
+            ) { scope.launch { app.repo.deleteCourse(c); nav.popBackStack() } }
         }
     }
 }

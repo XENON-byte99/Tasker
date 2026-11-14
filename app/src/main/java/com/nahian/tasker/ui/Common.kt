@@ -253,3 +253,27 @@ fun RescheduleDialog(title: String, min: Int, onDismiss: () -> Unit, onSave: (St
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+/** A delete-style button that always asks "are you sure?" before doing anything. */
+@Composable
+fun ConfirmButton(
+    label: String,
+    question: String,
+    modifier: Modifier = Modifier,
+    outlined: Boolean = false,
+    confirmLabel: String = "Delete",
+    onConfirm: () -> Unit,
+) {
+    var asking by remember { mutableStateOf(false) }
+    if (outlined) OutlinedButton(onClick = { asking = true }, modifier = modifier) { Text(label, color = Warn) }
+    else TextButton(onClick = { asking = true }, modifier = modifier) { Text(label, color = Warn) }
+    if (asking) {
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            title = { Text("Are you sure?") },
+            text = { Text(question) },
+            confirmButton = { TextButton(onClick = { asking = false; onConfirm() }) { Text(confirmLabel, color = Warn) } },
+            dismissButton = { TextButton(onClick = { asking = false }) { Text("Cancel") } },
+        )
+    }
+}
