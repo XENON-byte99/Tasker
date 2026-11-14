@@ -67,7 +67,7 @@ private fun ExpensesTab(nav: NavController) {
 
     Button(onClick = { nav.navigate("expenseAdd") }, modifier = Modifier.fillMaxWidth()) { Text("Add expense") }
 
-    SectionCard("$month · by category") {
+    SectionCard("$month · by category", accent = moduleColor("MONEY")) {
         Text(money(monthTotal), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         val byCat = monthItems.groupBy { it.categoryId }.mapValues { e -> e.value.sumOf { it.amount } }.toList().sortedByDescending { it.second }
         val top = byCat.firstOrNull()?.second ?: 0L
@@ -78,7 +78,7 @@ private fun ExpensesTab(nav: NavController) {
         }
     }
 
-    SectionCard("By date") {
+    SectionCard("By date", accent = moduleColor("MONEY")) {
         val items = expenses.filter { it.date == day }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             TextButton(onClick = { day = date(day).minusDays(1).toString() }) { Text("‹ Earlier") }
@@ -100,6 +100,7 @@ private fun ExpensesTab(nav: NavController) {
                 )
                 ConfirmButton("Delete", "Delete this expense of ${money(t.amount)}? This cannot be undone.") { scope.launch { app.dao.deleteTxn(t) } }
             }
+            RowDivider()
         }
     }
 }
@@ -204,7 +205,7 @@ private fun LoansTab(nav: NavController) {
         }
     }
 
-    SectionCard("People") {
+    SectionCard("People", accent = moduleColor("MONEY")) {
         if (persons.isEmpty()) Text("No loans recorded yet.", color = Muted)
         persons.forEach { p ->
             val mine = loans.filter { it.personId == p.id }
@@ -291,10 +292,11 @@ private fun IncomeTab() {
         Stat("All time", money(income.sumOf { it.amount }), Modifier.weight(1f))
     }
     Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) { Text("Add other income") }
-    SectionCard("Income history") {
+    SectionCard("Income history", accent = moduleColor("MONEY")) {
         if (income.isEmpty()) Text("Tuition payments you record appear here.", color = Muted)
         income.take(60).forEach { t ->
             Line(t.note.ifBlank { "Income" }, fmtDate(t.date), money(t.amount), Teal, Modifier.clickable { })
+            RowDivider()
         }
     }
 

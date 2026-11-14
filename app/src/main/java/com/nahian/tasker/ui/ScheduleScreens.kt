@@ -96,7 +96,7 @@ private fun TuitionsTab(nav: NavController) {
     if (todays.isEmpty()) Text("No tuition on this day.", color = Muted)
     todays.forEach { s ->
         val t = tuitions.first { it.id == s.tuitionId }
-        SectionCard {
+        SectionCard(accent = moduleColor("TUITION")) {
             Line(
                 listOf(t.name, t.subject).filter { it.isNotBlank() }.joinToString(" · "),
                 fmtTime(s.startMin) + " · " + t.durationMin + " min",
@@ -125,7 +125,7 @@ private fun TuitionsTab(nav: NavController) {
         val done = if (open == null) 0 else sessions.count { it.setId == open.id && it.status == "DONE" }
         val unpaid = sets.filter { it.tuitionId == t.id && it.status == "COMPLETE" }.sumOf { maxOf(0L, it.fee - it.paidAmount) }
         val next = sessions.filter { it.tuitionId == t.id && it.status == "PLANNED" && it.date >= today() }.minByOrNull { it.date }
-        SectionCard(container = if (unpaid > 0) Color(0xFFFFF6EC) else Color.White) {
+        SectionCard(container = if (unpaid > 0) Color(0xFFFFF6EC) else Color.White, accent = moduleColor("TUITION")) {
             Column(Modifier.fillMaxWidth().clickable { nav.navigate("tuition/${t.id}") }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Line(
                     listOf(t.name, t.subject).filter { it.isNotBlank() }.joinToString(" · "),
@@ -166,7 +166,7 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
         Text("${weekdaysLabel(t.days)} · ${fmtTime(t.startMin)} · ${t.durationMin} min · ${payLabel(t)}", color = Muted)
 
         val open = sets.firstOrNull { it.status == "OPEN" }
-        SectionCard(if (open != null) "Set ${open.number} · started ${fmtDate(open.startDate)}" else "Current set") {
+        SectionCard(if (open != null) "Set ${open.number} · started ${fmtDate(open.startDate)}" else "Current set", accent = moduleColor("TUITION")) {
             if (open == null) {
                 Text("A new set starts when you mark the next day as done.")
             } else {
@@ -199,7 +199,7 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
             }
         }
 
-        SectionCard("Days") {
+        SectionCard("Days", accent = moduleColor("TUITION")) {
             OutlinedButton(onClick = { scope.launch { app.repo.addExtraTuitionDay(id, today(), "Extra day") } }) { Text("Add extra day (today)") }
             if (sessions.isEmpty()) Text("No days yet.", color = Muted)
             sessions.take(40).forEach { s ->
@@ -215,7 +215,7 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
             }
         }
 
-        SectionCard("Income from this tuition") {
+        SectionCard("Income from this tuition", accent = moduleColor("TUITION")) {
             val total = sets.sumOf { it.paidAmount }
             Text(money(total), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             sets.filter { it.paidAmount > 0 }.forEach { Line("Set ${it.number}", "Started ${fmtDate(it.startDate)}", money(it.paidAmount)) }
@@ -388,7 +388,7 @@ private fun ClassesTab(nav: NavController) {
     todays.forEach { s ->
         val c = courses.firstOrNull { it.id == s.courseId }
         val slot = slots.firstOrNull { it.id == s.slotId }
-        SectionCard {
+        SectionCard(accent = moduleColor("CLASS")) {
             Line(
                 listOf(c?.code ?: "", c?.title ?: "").filter { it.isNotBlank() }.joinToString(" · "),
                 fmtTime(s.startMin) + (slot?.let { " – " + fmtTime(it.endMin) + (if (it.room.isBlank()) "" else " · Room " + it.room) + " · " + it.type.lowercase() } ?: ""),
@@ -405,7 +405,7 @@ private fun ClassesTab(nav: NavController) {
         }
     }
 
-    SectionCard("Courses and attendance") {
+    SectionCard("Courses and attendance", accent = moduleColor("CLASS")) {
         if (courses.isEmpty()) Text("No courses yet.", color = Muted)
         courses.forEach { c ->
             val attended = sessions.count { it.courseId == c.id && it.status == "ATTENDED" }
@@ -477,7 +477,7 @@ fun CourseEditScreen(nav: NavController, id: Long) {
         Field("Teacher (optional)", teacher, { teacher = it })
         Field("Warn if attendance falls below (%)", minAtt, { minAtt = it }, number = true)
 
-        SectionCard("Weekly class times") {
+        SectionCard("Weekly class times", accent = moduleColor("CLASS")) {
             if (slots.isEmpty()) Text("Add at least one class time below.", color = Muted)
             slots.toList().forEach { s ->
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

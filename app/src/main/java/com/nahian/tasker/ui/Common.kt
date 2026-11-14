@@ -2,7 +2,9 @@
 
 package com.nahian.tasker.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +29,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,7 +72,7 @@ fun TaskerTheme(content: @Composable () -> Unit) {
             primary = Teal,
             secondary = Teal,
             tertiary = Color(0xFFB4530A),
-            background = Color(0xFFF6F7F9),
+            background = Color(0xFFECEFF3),
             surface = Color.White,
             surfaceVariant = Color(0xFFE7EAEE),
             secondaryContainer = Color(0xFFCFE6E2),
@@ -105,11 +108,31 @@ fun Screen(
     }
 }
 
+val CardBorder = Color(0xFFC3CAD4)
+
 @Composable
-fun SectionCard(title: String? = null, container: Color = Color.White, content: @Composable ColumnScope.() -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = container), modifier = Modifier.fillMaxWidth()) {
+fun RowDivider() {
+    HorizontalDivider(color = Color(0xFFD5DAE1))
+}
+
+/**
+ * A white bordered card. With an accent colour it gets a coloured bar on top and a coloured
+ * title, so each kind of content (tuition, class, prayer, to-do, money) is easy to tell apart.
+ */
+@Composable
+fun SectionCard(title: String? = null, container: Color = Color.White, accent: Color? = null, content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = container),
+        border = BorderStroke(1.dp, CardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        if (accent != null) Box(Modifier.fillMaxWidth().height(6.dp).background(accent))
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (title != null) Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = Muted)
+            if (title != null) {
+                Text(title.uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = accent ?: Color(0xFF1F2937))
+                RowDivider()
+            }
             content()
         }
     }
@@ -160,7 +183,12 @@ fun <T> Dropdown(label: String, options: List<Pair<T, String>>, selected: T, onS
 
 @Composable
 fun Stat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) {
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = modifier) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, CardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = modifier,
+    ) {
         Column(Modifier.padding(14.dp)) {
             Text(label, style = MaterialTheme.typography.bodySmall, color = Muted)
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color)

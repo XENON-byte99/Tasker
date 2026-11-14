@@ -19,6 +19,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -45,6 +46,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,22 +61,43 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import com.nahian.tasker.R
 import com.nahian.tasker.TaskerApp
+import com.nahian.tasker.core.Pending
+import com.nahian.tasker.core.PendingItem
 import com.nahian.tasker.core.fmtMillis
 import com.nahian.tasker.core.parseMoney
 import com.nahian.tasker.core.today
 import com.nahian.tasker.data.Task
 import com.nahian.tasker.ui.Dropdown
 import com.nahian.tasker.ui.Field
+import com.nahian.tasker.ui.Line
+import com.nahian.tasker.ui.RescheduleDialog
+import com.nahian.tasker.ui.RowDivider
+import com.nahian.tasker.ui.Tag
+import com.nahian.tasker.ui.moduleColor
+import com.nahian.tasker.ui.moduleLabel
 import com.nahian.tasker.ui.MainActivity
 import com.nahian.tasker.ui.TaskerTheme
 import com.nahian.tasker.ui.rememberFlow
 import com.nahian.tasker.ui.taskerApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-/** Keeps a small draggable bubble on top of other apps. Tapping it opens the quick panel. */
+/**
+ * Keeps a small draggable bubble on top of other apps. Under it, one coloured badge per kind
+ * of item (tuition, class, prayer, to-do) shows how many are waiting for an answer.
+ * Tapping the bubble opens the quick panel; tapping a badge opens only that kind.
+ */
 class BubbleService : Service() {
-    private var bubble: View? = null
+    private var container: LinearLayout? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -93,12 +118,23 @@ class BubbleService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
+    private fun openQuick(module: String?) {
+        val i = Intent(this, QuickActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        if (module != null) i.putExtra("module", module)
+        startActivity(i)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun addBubble() {
-        val prefs = (application as TaskerApp).prefs
+        val app = application as TaskerApp
+        val prefs = app.prefs
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val size = (56 * resources.displayMetrics.density).toInt()
-        val tv = TextView(this).apply {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        val main = TextView(this).apply {
             text = "T"
             gravity = Gravity.CENTER
             setTextColor(AColor.WHITE)
@@ -108,10 +144,12 @@ class BubbleService : Service() {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(0xFF0F6E66.toInt())
+                setStroke((2 * resources.displayMetrics.density).toInt(), AColor.WHITE)
             }
         }
+        box.addView(main, LinearLayout.LayoutParams(size, size))
         val lp = WindowManager.LayoutParams(
-            size, size,
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
@@ -120,7 +158,7 @@ class BubbleService : Service() {
             x = prefs.bubbleX
             y = prefs.bubbleY
         }
-        tv.setOnTouchListener(object : View.OnTouchListener {
+        main.setOnTouchListener(object : View.OnTouchListener {
             var startX = 0
             var startY = 0
             var touchX = 0f
@@ -137,16 +175,16 @@ class BubbleService : Service() {
                         if (abs(dx) > 12 || abs(dy) > 12) moved = true
                         lp.x = startX + dx
                         lp.y = startY + dy
-                        wm.updateViewLayout(v, lp)
+                        wm.updateViewLayout(box, lp)
                     }
                     MotionEvent.ACTION_UP -> {
                         if (!moved) {
-                            startActivity(Intent(this@BubbleService, QuickActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            openQuick(null)
                         } else {
                             // Snap to the nearest side edge and remember the position.
                             val w = resources.displayMetrics.widthPixels
                             lp.x = if (lp.x + size / 2 < w / 2) 0 else w - size
-                            wm.updateViewLayout(v, lp)
+                            wm.updateViewLayout(box, lp)
                             prefs.bubbleX = lp.x
                             prefs.bubbleY = lp.y
                         }
@@ -155,13 +193,53 @@ class BubbleService : Service() {
                 return true
             }
         })
-        wm.addView(tv, lp)
-        bubble = tv
+        wm.addView(box, lp)
+        container = box
+
+        // Refresh the badges whenever the data changes, and once a minute as time passes.
+        scope.launch {
+            val dao = app.dao
+            val ticker = flow { while (true) { emit(Unit); delay(60_000) } }
+            merge(
+                dao.flowTuitionSessions().map { }, dao.flowClassSessions().map { }, dao.flowTasks().map { },
+                dao.flowPrayerConfigs().map { }, dao.flowPrayerLogs(today()).map { }, ticker,
+            ).collect {
+                try { renderBadges(Pending.load(dao)) } catch (e: Exception) { e.printStackTrace() }
+            }
+        }
+    }
+
+    private fun renderBadges(items: List<PendingItem>) {
+        val box = container ?: return
+        while (box.childCount > 1) box.removeViewAt(1)
+        val d = resources.displayMetrics.density
+        val s = (30 * d).toInt()
+        listOf("TUITION", "CLASS", "PRAYER", "TASK").forEach { m ->
+            val n = items.count { it.module == m }
+            if (n > 0) {
+                val badge = TextView(this).apply {
+                    text = if (n > 9) "9+" else n.toString()
+                    gravity = Gravity.CENTER
+                    setTextColor(AColor.WHITE)
+                    textSize = 13f
+                    typeface = Typeface.DEFAULT_BOLD
+                    contentDescription = "$n ${moduleLabel(m)} waiting"
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(moduleColor(m).toArgb())
+                        setStroke((2 * d).toInt(), AColor.WHITE)
+                    }
+                    setOnClickListener { openQuick(m) }
+                }
+                box.addView(badge, LinearLayout.LayoutParams(s, s).apply { topMargin = (4 * d).toInt() })
+            }
+        }
     }
 
     override fun onDestroy() {
-        bubble?.let { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it) }
-        bubble = null
+        scope.cancel()
+        container?.let { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it) }
+        container = null
         super.onDestroy()
     }
 }
@@ -180,7 +258,8 @@ class QuickActivity : ComponentActivity() {
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         modifier = Modifier.fillMaxWidth().clickable { },
                     ) {
-                        QuickPanel(
+                        val module = intent.getStringExtra("module")
+                        if (module != null) FocusPanel(module) { finish() } else QuickPanel(
                             onOpenApp = {
                                 startActivity(Intent(this@QuickActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                                 finish()
@@ -256,5 +335,74 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
         ) { Text("Add to-do") }
 
         if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/** Opened from a coloured badge: shows only that kind of waiting item, with its answer buttons. */
+@Composable
+private fun FocusPanel(module: String, onClose: () -> Unit) {
+    val app = taskerApp()
+    val scope = app.ui
+    val tuitions by rememberFlow { app.dao.flowTuitions() }
+    val tSessions by rememberFlow { app.dao.flowTuitionSessions() }
+    val courses by rememberFlow { app.dao.flowCourses() }
+    val cSessions by rememberFlow { app.dao.flowClassSessions() }
+    val configs by rememberFlow { app.dao.flowPrayerConfigs() }
+    val logs by rememberFlow { app.dao.flowPrayerLogs(today()) }
+    val tasks by rememberFlow { app.dao.flowTasks() }
+    val tick by produceState(0) { while (true) { delay(30_000); value = value + 1 } }
+    val items = remember(tuitions, tSessions, courses, cSessions, configs, logs, tasks, tick) {
+        Pending.compute(tuitions, tSessions, courses, cSessions, configs, logs, tasks)
+    }.filter { it.module == module }
+    var move by remember { mutableStateOf<PendingItem?>(null) }
+    val day = today()
+
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Tag(module)
+                Text(
+                    when (module) { "TUITION" -> "Tuitions to mark"; "CLASS" -> "Classes to mark"; "PRAYER" -> "Prayers to mark"; else -> "To-dos due" },
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                )
+            }
+            TextButton(onClick = onClose) { Text("Close") }
+        }
+        RowDivider()
+        if (items.isEmpty()) Text("Nothing is waiting here. All caught up.")
+        items.forEach { item ->
+            Line(item.title, item.sub)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                when (module) {
+                    "TUITION" -> {
+                        Button(onClick = { scope.launch { app.repo.markTuitionSession(item.id, "DONE", "") } }) { Text("Done") }
+                        OutlinedButton(onClick = { scope.launch { app.repo.markTuitionSession(item.id, "MISSED", "") } }) { Text("Missed") }
+                        OutlinedButton(onClick = { move = item }) { Text("Reschedule") }
+                    }
+                    "CLASS" -> {
+                        Button(onClick = { scope.launch { app.repo.markClassSession(item.id, "ATTENDED", "") } }) { Text("Attended") }
+                        OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(item.id, "MISSED", "") } }) { Text("Missed") }
+                        OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(item.id, "CANCELLED", "") } }) { Text("Off") }
+                        OutlinedButton(onClick = { move = item }) { Text("Reschedule") }
+                    }
+                    "PRAYER" -> {
+                        Button(onClick = { scope.launch { app.repo.setPrayer(day, item.key, "PRAYED") } }) { Text("Prayed") }
+                        OutlinedButton(onClick = { scope.launch { app.repo.setPrayer(day, item.key, "JAMAAT") } }) { Text("Jamaat") }
+                        OutlinedButton(onClick = { scope.launch { app.repo.setPrayer(day, item.key, "LATE") } }) { Text("Late") }
+                        OutlinedButton(onClick = { scope.launch { app.repo.setPrayer(day, item.key, "MISSED") } }) { Text("Missed") }
+                    }
+                    else -> {
+                        Button(onClick = { scope.launch { app.dao.getTask(item.id)?.let { app.repo.completeTask(it) } } }) { Text("Done") }
+                    }
+                }
+            }
+            RowDivider()
+        }
+    }
+
+    move?.let { item ->
+        RescheduleDialog(if (module == "TUITION") "Reschedule tuition day" else "Reschedule class", item.startMin, { move = null }) { d, m ->
+            scope.launch { if (module == "TUITION") app.repo.moveTuitionSession(item.id, d, m, "") else app.repo.moveClassSession(item.id, d, m) }
+        }
     }
 }

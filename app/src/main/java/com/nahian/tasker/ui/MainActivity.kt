@@ -178,6 +178,7 @@ fun HomeScreen(nav: NavController) {
                     }
                     OutlinedButton(onClick = { scope.launch { app.repo.reminderDone(r) } }) { Text("Done") }
                 }
+                RowDivider()
             }
         }
 
@@ -185,7 +186,7 @@ fun HomeScreen(nav: NavController) {
         val dueTuition = tSessions.filter { it.status == "PLANNED" && (it.date < day || (it.date == day && it.startMin <= nowMin)) }
         val dueClass = cSessions.filter { it.status == "PLANNED" && (it.date < day || (it.date == day && it.startMin <= nowMin)) }
         if (dueTuition.isNotEmpty() || dueClass.isNotEmpty()) {
-            SectionCard("Needs marking", container = Color(0xFFFFF6EC)) {
+            SectionCard("Needs marking", container = Color(0xFFFFF6EC), accent = Color(0xFFB4530A)) {
                 dueTuition.take(5).forEach { s ->
                     val t = tuitions.firstOrNull { it.id == s.tuitionId }
                     Tag("TUITION")
@@ -195,6 +196,7 @@ fun HomeScreen(nav: NavController) {
                         OutlinedButton(onClick = { scope.launch { app.repo.markTuitionSession(s.id, "MISSED", s.note) } }) { Text("Missed") }
                         OutlinedButton(onClick = { moveT = s }) { Text("Reschedule") }
                     }
+                    RowDivider()
                 }
                 dueClass.take(5).forEach { s ->
                     val c = courses.firstOrNull { it.id == s.courseId }
@@ -206,12 +208,13 @@ fun HomeScreen(nav: NavController) {
                         OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(s.id, "CANCELLED", s.note) } }) { Text("Off") }
                         OutlinedButton(onClick = { moveC = s }) { Text("Reschedule") }
                     }
+                    RowDivider()
                 }
             }
         }
 
         val prayedToday = logs.filter { it.date == day && it.status != "MISSED" }.map { it.prayer }
-        SectionCard("Prayers today · ${prayedToday.size} of ${PRAYERS.size}") {
+        SectionCard("Prayers today · ${prayedToday.size} of ${PRAYERS.size}", accent = moduleColor("PRAYER")) {
             Tag("PRAYER")
             Text(PRAYERS.joinToString("   ") { (if (it in prayedToday) "✓ " else "○ ") + it })
             OutlinedButton(onClick = { nav.navigate("prayer") }) { Text("Mark prayers") }

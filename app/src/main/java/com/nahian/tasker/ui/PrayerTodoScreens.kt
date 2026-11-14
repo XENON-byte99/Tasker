@@ -71,7 +71,7 @@ fun PrayerScreen() {
             LaunchedEffect(configs) {
                 configs.forEach { if (it.prayer !in times) { times[it.prayer] = time24(it.timeMin); enabled[it.prayer] = it.enabled } }
             }
-            SectionCard("Times and alerts") {
+            SectionCard("Times and alerts", accent = moduleColor("PRAYER")) {
                 Text("Type each time in 24-hour form. A reminder fires at that time.", style = MaterialTheme.typography.bodySmall, color = Muted)
                 configs.forEach { c ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -90,7 +90,7 @@ fun PrayerScreen() {
             }
         }
 
-        SectionCard("Today") {
+        SectionCard("Today", accent = moduleColor("PRAYER")) {
             configs.forEach { c ->
                 val status = logs.firstOrNull { it.date == day && it.prayer == c.prayer }?.status
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -108,7 +108,7 @@ fun PrayerScreen() {
             }
         }
 
-        SectionCard("Last 7 days") {
+        SectionCard("Last 7 days", accent = moduleColor("PRAYER")) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 (6 downTo 0).forEach { back ->
                     val d = date(day).minusDays(back.toLong())
@@ -174,6 +174,7 @@ private fun TaskRow(t: Task, sub: String, nav: NavController) {
             )
         }
     }
+    RowDivider()
 }
 
 @Composable
@@ -207,7 +208,7 @@ fun TodoScreen(nav: NavController) {
         if (filter == "CATEGORY") {
             val mains = cats.filter { it.parentId == null }
             mains.forEach { main ->
-                SectionCard {
+                SectionCard(accent = moduleColor("TASK")) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(main.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         ConfirmButton("Delete", "Delete the category \"${main.name}\"? Its tasks are kept without a category.") { scope.launch { app.repo.deleteTaskCategory(main) } }
@@ -225,7 +226,7 @@ fun TodoScreen(nav: NavController) {
                 }
             }
             val loose = open.filter { it.categoryId == null }
-            if (loose.isNotEmpty()) SectionCard("No category") { loose.forEach { TaskRow(it, "", nav) } }
+            if (loose.isNotEmpty()) SectionCard("No category", accent = moduleColor("TASK")) { loose.forEach { TaskRow(it, "", nav) } }
             if (mains.isEmpty() && loose.isEmpty()) Text("Add a category such as University, then sub-categories under it.", color = Muted)
         } else {
             val list = when (filter) {
@@ -234,7 +235,7 @@ fun TodoScreen(nav: NavController) {
                 "OVERDUE" -> open.filter { it.dueDate != null && it.dueDate < day }
                 else -> tasks.filter { it.completedAt != null }.sortedByDescending { it.completedAt }.take(60)
             }
-            SectionCard {
+            SectionCard(accent = moduleColor("TASK")) {
                 if (list.isEmpty()) Text("Nothing here.", color = Muted)
                 list.forEach { TaskRow(it, label(it), nav) }
             }

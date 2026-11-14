@@ -70,7 +70,7 @@ fun AnalyticsScreen(nav: NavController) {
         }
         Stat("Saved in this period", money(income - expense), Modifier.fillMaxWidth(), if (income >= expense) Teal else Warn)
 
-        SectionCard("Income and expenses · last 6 months") {
+        SectionCard("Income and expenses · last 6 months", accent = moduleColor("MONEY")) {
             val months = (5 downTo 0).map { now.minusMonths(it.toLong()).toString().take(7) }
             val rows = months.map { m ->
                 Triple(
@@ -88,7 +88,7 @@ fun AnalyticsScreen(nav: NavController) {
             }
         }
 
-        SectionCard("Spending by category") {
+        SectionCard("Spending by category", accent = moduleColor("MONEY")) {
             val byCat = txns.filter { it.type == "EXPENSE" && it.date >= from }.groupBy { it.categoryId }
                 .mapValues { e -> e.value.sumOf { it.amount } }.toList().sortedByDescending { it.second }
             val top = byCat.firstOrNull()?.second ?: 0L
@@ -99,7 +99,7 @@ fun AnalyticsScreen(nav: NavController) {
             }
         }
 
-        SectionCard("Tuition") {
+        SectionCard("Tuition", accent = moduleColor("TUITION")) {
             val done = tSessions.count { it.status == "DONE" && it.date >= from }
             val missed = tSessions.count { it.status == "MISSED" && it.date >= from }
             val due = sets.filter { it.status == "COMPLETE" }.sumOf { maxOf(0L, it.fee - it.paidAmount) }
@@ -108,7 +108,7 @@ fun AnalyticsScreen(nav: NavController) {
             Line("Fees still to collect", trailing = money(due), trailingColor = if (due > 0) Warn else Color.Unspecified)
         }
 
-        SectionCard("Class attendance") {
+        SectionCard("Class attendance", accent = moduleColor("CLASS")) {
             if (courses.isEmpty()) Text("No courses yet.", color = Muted)
             courses.forEach { c ->
                 val a = cSessions.count { it.courseId == c.id && it.status == "ATTENDED" && it.date >= from }
@@ -119,7 +119,7 @@ fun AnalyticsScreen(nav: NavController) {
             }
         }
 
-        SectionCard("Prayer") {
+        SectionCard("Prayer", accent = moduleColor("PRAYER")) {
             val prayed = logs.count { it.status != "MISSED" }
             val total = days * 5
             Line("Prayers marked", "Out of $total in this period", "$prayed", Teal)
@@ -128,7 +128,7 @@ fun AnalyticsScreen(nav: NavController) {
             Line("Missed", trailing = "${logs.count { it.status == "MISSED" }}", trailingColor = Warn)
         }
 
-        SectionCard("To-do and loans") {
+        SectionCard("To-do and loans", accent = moduleColor("TASK")) {
             val fromMs = date(from).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
             Line("Tasks completed", trailing = "${tasks.count { (it.completedAt ?: 0L) >= fromMs }}")
             Line("Tasks open", trailing = "${tasks.count { it.completedAt == null }}")
