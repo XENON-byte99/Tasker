@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.nahian.tasker.core.PRAYERS
 import com.nahian.tasker.core.Planner
 import com.nahian.tasker.core.ReminderScheduler
+import com.nahian.tasker.core.fmtDate
 import com.nahian.tasker.core.fmtTime
 import com.nahian.tasker.core.millisOf
 import com.nahian.tasker.core.parseDateOrNull
@@ -110,7 +111,8 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         val t = dao.getTuition(s.tuitionId) ?: return
         dao.updateTuitionSession(s.copy(status = "MOVED"))
         dao.deleteReminderByKey("TUI:$sessionId")
-        val nid = dao.insertTuitionSession(TuitionSession(tuitionId = s.tuitionId, date = newDate, startMin = newMin, note = note))
+        val moved = if (note.isBlank()) "Rescheduled from ${fmtDate(s.date)}" else note
+        val nid = dao.insertTuitionSession(TuitionSession(tuitionId = s.tuitionId, date = newDate, startMin = newMin, note = moved))
         val at = millisOf(newDate, newMin) - t.remindBeforeMin * 60_000L
         if (at > System.currentTimeMillis()) {
             dao.insertReminder(
@@ -164,6 +166,27 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         val s = dao.getClassSession(sessionId) ?: return
         dao.updateClassSession(s.copy(status = status, note = note))
         if (status != "PLANNED") dao.completeReminderByKey("CLS:$sessionId")
+    }
+
+    /** Moves one class to another day or time (a make-up class). The original is not counted. */
+    suspend fun moveClassSession(sessionId: Long, newDate: String, newMin: Int) {
+        val s = dao.getClassSession(sessionId) ?: return
+        val c = dao.getCourse(s.courseId) ?: return
+        dao.updateClassSession(s.copy(status = "MOVED"))
+        dao.deleteReminderByKey("CLS:$sessionId")
+        val nid = dao.insertClassSession(
+            ClassSession(courseId = s.courseId, slotId = 0, date = newDate, startMin = newMin, note = "Rescheduled from ${fmtDate(s.date)}")
+        )
+        val at = millisOf(newDate, newMin) - prefs.classRemindMin.intValue * 60_000L
+        if (at > System.currentTimeMillis()) {
+            dao.insertReminder(
+                Reminder(
+                    rkey = "CLS:$nid", module = "CLASS", sourceId = nid, title = "Class: ${c.code}",
+                    body = "${c.title} at ${fmtTime(newMin)} (rescheduled)".trim(), fireAt = at,
+                )
+            )
+        }
+        ReminderScheduler.scheduleAll(ctx)
     }
 
     // ---------------- Money ----------------

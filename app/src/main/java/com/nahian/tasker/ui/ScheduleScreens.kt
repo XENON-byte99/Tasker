@@ -3,6 +3,8 @@
 package com.nahian.tasker.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -210,8 +212,13 @@ private fun TuitionSessionDialog(s: TuitionSession, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf(s.status) }
     var note by remember { mutableStateOf(s.note) }
-    var dateTxt by remember { mutableStateOf(s.date) }
-    var timeTxt by remember { mutableStateOf(time24(s.startMin)) }
+    var moving by remember { mutableStateOf(false) }
+    if (moving) {
+        RescheduleDialog("Reschedule ${fmtDate(s.date)}", s.startMin, onDismiss) { d, m ->
+            scope.launch { app.repo.moveTuitionSession(s.id, d, m, note) }
+        }
+        return
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(fmtDate(s.date)) },
@@ -219,22 +226,12 @@ private fun TuitionSessionDialog(s: TuitionSession, onDismiss: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Choice(listOf("PLANNED" to "Planned", "DONE" to "Done", "MISSED" to "Missed"), status) { status = it }
                 Field("Note for this day", note, { note = it })
-                Text("To move this day, change the date or time:", style = MaterialTheme.typography.bodySmall)
-                Field("Date (YYYY-MM-DD)", dateTxt, { dateTxt = it })
-                Field("Time (24h, e.g. 17:30)", timeTxt, { timeTxt = it })
+                OutlinedButton(onClick = { moving = true }) { Text("Reschedule to another day") }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                val d = parseDateOrNull(dateTxt)
-                val m = parseTimeOrNull(timeTxt)
-                scope.launch {
-                    if (d != null && m != null && (d.toString() != s.date || m != s.startMin)) {
-                        app.repo.moveTuitionSession(s.id, d.toString(), m, note)
-                    } else {
-                        app.repo.markTuitionSession(s.id, status, note)
-                    }
-                }
+                scope.launch { app.repo.markTuitionSession(s.id, status, note) }
                 onDismiss()
             }) { Text("Save") }
         },
@@ -345,11 +342,12 @@ private fun ClassesTab(nav: NavController) {
     val sessions by rememberFlow { app.dao.flowClassSessions() }
     var day by rememberSaveable { mutableStateOf(today()) }
     var editing by remember { mutableStateOf<ClassSession?>(null) }
+    var moving by remember { mutableStateOf<ClassSession?>(null) }
 
     val start = date(today())
     Choice((0..6).map { i -> start.plusDays(i.toLong()).let { it.toString() to (WEEKDAYS[it.dayOfWeek.value - 1] + " " + it.dayOfMonth) } }, day) { day = it }
 
-    val todays = sessions.filter { it.date == day }.sortedBy { it.startMin }
+    val todays = sessions.filter { it.date == day && it.status != "MOVED" }.sortedBy { it.startMin }
     if (todays.isEmpty()) Text("No classes on this day.", color = Muted)
     todays.forEach { s ->
         val c = courses.firstOrNull { it.id == s.courseId }
@@ -362,9 +360,10 @@ private fun ClassesTab(nav: NavController) {
                 if (s.status == "MISSED") Warn else Teal,
             )
             if (s.note.isNotBlank()) Text(s.note, style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(s.id, "ATTENDED", s.note) } }) { Text("Attended") }
                 OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(s.id, "MISSED", s.note) } }) { Text("Missed") }
+                TextButton(onClick = { moving = s }) { Text("Reschedule") }
                 TextButton(onClick = { editing = s }) { Text("Note") }
             }
         }
@@ -388,6 +387,10 @@ private fun ClassesTab(nav: NavController) {
         }
     }
     Button(onClick = { nav.navigate("courseEdit/0") }, modifier = Modifier.fillMaxWidth()) { Text("Add course") }
+
+    moving?.let { s ->
+        RescheduleDialog("Reschedule class", s.startMin, { moving = null }) { d, m -> scope.launch { app.repo.moveClassSession(s.id, d, m) } }
+    }
 
     editing?.let { s ->
         var note by remember(s.id) { mutableStateOf(s.note) }

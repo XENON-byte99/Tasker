@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -32,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -48,6 +51,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nahian.tasker.TaskerApp
+import com.nahian.tasker.core.WEEKDAYS
+import com.nahian.tasker.core.parseDateOrNull
+import com.nahian.tasker.core.parseTimeOrNull
+import com.nahian.tasker.core.time24
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
 val Teal = Color(0xFF0F6E66)
@@ -186,3 +194,62 @@ fun Line(title: String, sub: String = "", trailing: String = "", trailingColor: 
 @Composable
 fun <T> rememberFlow(vararg keys: Any?, block: () -> Flow<List<T>>): State<List<T>> =
     remember(*keys) { block() }.collectAsState(emptyList())
+
+/** One colour per kind of item, so tuition, classes, prayer, to-do and money are easy to tell apart. */
+fun moduleColor(module: String): Color = when (module) {
+    "TUITION" -> Color(0xFF0F6E66)
+    "CLASS" -> Color(0xFF1D4ED8)
+    "PRAYER" -> Color(0xFF7C3AED)
+    "TASK" -> Color(0xFFB4530A)
+    else -> Color(0xFFBE185D)
+}
+
+fun moduleLabel(module: String): String = when (module) {
+    "TUITION" -> "Tuition"
+    "CLASS" -> "Class"
+    "PRAYER" -> "Prayer"
+    "TASK" -> "To-do"
+    else -> "Money"
+}
+
+@Composable
+fun Tag(module: String) {
+    val c = moduleColor(module)
+    Text(
+        moduleLabel(module).uppercase(),
+        color = c,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.background(c.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
+    )
+}
+
+/** Asks for a new day and time. The next 7 days are one tap; any other date can be typed. */
+@Composable
+fun RescheduleDialog(title: String, min: Int, onDismiss: () -> Unit, onSave: (String, Int) -> Unit) {
+    val start = LocalDate.now()
+    var d by remember { mutableStateOf(start.plusDays(1).toString()) }
+    var t by remember { mutableStateOf(time24(min)) }
+    var err by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Pick the new day. The original day will not be counted.", style = MaterialTheme.typography.bodySmall)
+                Choice((0..7).map { i -> start.plusDays(i.toLong()).let { it.toString() to (if (i == 0) "Today" else WEEKDAYS[it.dayOfWeek.value - 1] + " " + it.dayOfMonth) } }, d) { d = it }
+                Field("Or type a date (YYYY-MM-DD)", d, { d = it })
+                Field("Time (24h, e.g. 17:30)", t, { t = it })
+                if (err.isNotEmpty()) Text(err, color = Warn)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val pd = parseDateOrNull(d)
+                val pm = parseTimeOrNull(t)
+                if (pd == null || pm == null) err = "Use a date like 2026-11-18 and a time like 17:30." else { onSave(pd.toString(), pm); onDismiss() }
+            }) { Text("Reschedule") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
