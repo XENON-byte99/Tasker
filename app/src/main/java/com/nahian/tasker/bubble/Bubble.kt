@@ -67,7 +67,12 @@ import com.nahian.tasker.core.fmtMillis
 import com.nahian.tasker.core.parseMoney
 import com.nahian.tasker.core.today
 import com.nahian.tasker.data.Task
+import com.nahian.tasker.data.ClassSession
+import com.nahian.tasker.data.TuitionSession
+import com.nahian.tasker.ui.ClassSessionDialog
+import com.nahian.tasker.ui.DaysAgenda
 import com.nahian.tasker.ui.Dropdown
+import com.nahian.tasker.ui.TuitionSessionDialog
 import com.nahian.tasker.ui.Field
 import com.nahian.tasker.ui.Line
 import com.nahian.tasker.ui.RescheduleDialog
@@ -284,6 +289,8 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
     var catId by remember { mutableStateOf<Long?>(null) }
     var todo by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
+    var openT by remember { mutableStateOf<TuitionSession?>(null) }
+    var openC by remember { mutableStateOf<ClassSession?>(null) }
 
     Column(
         Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
@@ -306,6 +313,10 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
                 OutlinedButton(onClick = { scope.launch { app.repo.reminderDone(r) } }) { Text("Done") }
             }
         }
+
+        RowDivider()
+        Text("TODAY AND THE NEXT 6 DAYS", style = MaterialTheme.typography.labelMedium)
+        DaysAgenda({ openT = it }, { openC = it }, { message = "Open the app to edit this to-do." })
 
         Text("QUICK EXPENSE", style = MaterialTheme.typography.labelMedium)
         Field("Amount (৳)", amount, { amount = it }, number = true)
@@ -336,6 +347,9 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
 
         if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.primary)
     }
+
+    openT?.let { s -> TuitionSessionDialog(s) { openT = null } }
+    openC?.let { s -> ClassSessionDialog(s) { openC = null } }
 }
 
 /** Opened from a coloured badge: shows only that kind of waiting item, with its answer buttons. */

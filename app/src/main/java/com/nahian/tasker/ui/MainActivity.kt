@@ -170,6 +170,10 @@ fun HomeScreen(nav: NavController) {
             }
         }
 
+        SectionCard("Today and the next 6 days") {
+            DaysAgenda({ openT = it }, { openC = it }, { nav.navigate("taskEdit/${it.id}") })
+        }
+
         SectionCard("Next up") {
             val soon = reminders.filter { it.fireAt < System.currentTimeMillis() + 24 * 60 * 60_000L }.take(5)
             if (soon.isEmpty()) Text("Nothing due in the next 24 hours.", color = Muted)
