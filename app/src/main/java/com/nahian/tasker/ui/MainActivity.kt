@@ -54,6 +54,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.nahian.tasker.core.PRAYERS
 import com.nahian.tasker.core.Planner
+import com.nahian.tasker.core.Updater
 import com.nahian.tasker.core.fmtMillis
 import com.nahian.tasker.core.fmtTime
 import com.nahian.tasker.core.money
@@ -82,6 +83,7 @@ fun AppRoot() {
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         Planner.sync(ctx)
+        Updater.check(ctx, quiet = true)
     }
     val tabs = listOf(
         Tab("home", "Home", Icons.Filled.Home),
@@ -137,6 +139,7 @@ fun AppRoot() {
 fun HomeScreen(nav: NavController) {
     val app = taskerApp()
     val scope = app.ui
+    val ctx = LocalContext.current
     val day = today()
     val reminders by rememberFlow { app.dao.flowPendingReminders() }
     val tuitions by rememberFlow { app.dao.flowTuitions() }
@@ -156,6 +159,14 @@ fun HomeScreen(nav: NavController) {
             IconButton(onClick = { nav.navigate("settings") }) { Icon(Icons.Filled.Settings, contentDescription = "Settings") }
         },
     ) {
+        if (Updater.available.intValue > 0) {
+            SectionCard("Update available", container = Color(0xFFEAF4F2)) {
+                Text("Build ${Updater.available.intValue} of Tasker is ready. Your data is kept.")
+                Button(onClick = { scope.launch { Updater.downloadAndInstall(ctx) } }, enabled = !Updater.busy.value) { Text(if (Updater.busy.value) "Downloading…" else "Update now") }
+                if (Updater.status.value.isNotEmpty()) Text(Updater.status.value, color = Muted)
+            }
+        }
+
         SectionCard("Next up") {
             val soon = reminders.filter { it.fireAt < System.currentTimeMillis() + 24 * 60 * 60_000L }.take(5)
             if (soon.isEmpty()) Text("Nothing due in the next 24 hours.", color = Muted)

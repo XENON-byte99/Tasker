@@ -5,6 +5,9 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Each GitHub build gets the next number, so the app can tell when a newer build exists.
+val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+
 android {
     namespace = "com.nahian.tasker"
     compileSdk = 35
@@ -13,12 +16,25 @@ android {
         applicationId = "com.nahian.tasker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = buildNumber
+        versionName = "0.1.$buildNumber"
+    }
+    signingConfigs {
+        // One fixed key for every build, so a new build installs over the old one and keeps the data.
+        create("tasker") {
+            storeFile = rootProject.file("keystore/tasker.jks")
+            storePassword = "tasker-update"
+            keyAlias = "tasker"
+            keyPassword = "tasker-update"
+        }
     }
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("tasker")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("tasker")
         }
     }
     compileOptions {

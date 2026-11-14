@@ -30,6 +30,9 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.nahian.tasker.bubble.BubbleService
 import com.nahian.tasker.core.ReminderScheduler
+import com.nahian.tasker.core.Updater
+import androidx.compose.material3.Button
+import kotlinx.coroutines.launch
 import com.nahian.tasker.core.date
 import com.nahian.tasker.core.money
 import com.nahian.tasker.core.today
@@ -193,6 +196,18 @@ fun SettingsScreen(nav: NavController) {
                 it.toIntOrNull()?.let { v -> prefs.setRepayShare(v.coerceIn(0, 100)) }
             }, number = true)
             Text("Set aside now: ${money(prefs.repayPool.longValue)}", color = Muted)
+        }
+
+        SectionCard("App updates") {
+            Text("Installed: build ${Updater.currentBuild(ctx)}", fontWeight = FontWeight.SemiBold)
+            Text("Tasker checks for a new build each time it opens. Updating needs internet; everything else works offline.", style = MaterialTheme.typography.bodySmall, color = Muted)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { app.ui.launch { Updater.check(ctx) } }) { Text("Check now") }
+                if (Updater.available.intValue > 0) {
+                    Button(onClick = { app.ui.launch { Updater.downloadAndInstall(ctx) } }, enabled = !Updater.busy.value) { Text("Update now") }
+                }
+            }
+            if (Updater.status.value.isNotEmpty()) Text(Updater.status.value, color = Muted)
         }
 
         SectionCard("Account and sync") {
