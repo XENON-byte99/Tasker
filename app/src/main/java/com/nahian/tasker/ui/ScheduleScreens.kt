@@ -242,7 +242,7 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
 }
 
 @Composable
-private fun TuitionSessionDialog(s: TuitionSession, onDismiss: () -> Unit) {
+fun TuitionSessionDialog(s: TuitionSession, onDismiss: () -> Unit) {
     val app = taskerApp()
     val scope = app.ui
     var status by remember { mutableStateOf(s.status) }
@@ -267,6 +267,38 @@ private fun TuitionSessionDialog(s: TuitionSession, onDismiss: () -> Unit) {
         confirmButton = {
             TextButton(onClick = {
                 scope.launch { app.repo.markTuitionSession(s.id, status, note) }
+                onDismiss()
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** Everything for one class in one window: status, note for that day, and reschedule. */
+@Composable
+fun ClassSessionDialog(s: ClassSession, onDismiss: () -> Unit) {
+    val app = taskerApp()
+    val scope = app.ui
+    var status by remember { mutableStateOf(s.status) }
+    var note by remember { mutableStateOf(s.note) }
+    var moving by remember { mutableStateOf(false) }
+    if (moving) {
+        RescheduleDialog("Reschedule class", s.startMin, onDismiss) { d, m -> scope.launch { app.repo.moveClassSession(s.id, d, m) } }
+        return
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Class on ${fmtDate(s.date)}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Choice(listOf("PLANNED" to "Planned", "ATTENDED" to "Attended", "MISSED" to "Missed", "CANCELLED" to "Cancelled"), status) { status = it }
+                Field("Note for this class", note, { note = it })
+                OutlinedButton(onClick = { moving = true }) { Text("Reschedule to another day") }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                scope.launch { app.repo.markClassSession(s.id, status, note) }
                 onDismiss()
             }) { Text("Save") }
         },

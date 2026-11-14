@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -151,6 +152,8 @@ fun HomeScreen(nav: NavController) {
 
     var moveT by remember { mutableStateOf<TuitionSession?>(null) }
     var moveC by remember { mutableStateOf<ClassSession?>(null) }
+    var openT by remember { mutableStateOf<TuitionSession?>(null) }
+    var openC by remember { mutableStateOf<ClassSession?>(null) }
 
     Screen(
         title = "Today",
@@ -172,7 +175,18 @@ fun HomeScreen(nav: NavController) {
             if (soon.isEmpty()) Text("Nothing due in the next 24 hours.", color = Muted)
             soon.forEach { r ->
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
+                    // Tapping an item opens the place where it can be edited, noted or deleted.
+                    Column(
+                        Modifier.weight(1f).clickable {
+                            when (r.module) {
+                                "TUITION" -> openT = tSessions.firstOrNull { it.id == r.sourceId }
+                                "CLASS" -> openC = cSessions.firstOrNull { it.id == r.sourceId }
+                                "TASK" -> nav.navigate("taskEdit/${r.sourceId}")
+                                "PRAYER" -> nav.navigate("prayer")
+                                else -> nav.navigate("money")
+                            }
+                        }
+                    ) {
                         Tag(r.module)
                         Line(r.title, fmtMillis(r.fireAt) + if (r.body.isNotEmpty()) " · " + r.body else "")
                     }
@@ -190,23 +204,25 @@ fun HomeScreen(nav: NavController) {
                 dueTuition.take(5).forEach { s ->
                     val t = tuitions.firstOrNull { it.id == s.tuitionId }
                     Tag("TUITION")
-                    Line(t?.name ?: "Tuition", "Tuition · ${com.nahian.tasker.core.fmtDate(s.date)} · ${fmtTime(s.startMin)}")
+                    Line(t?.name ?: "Tuition", "Tuition · ${com.nahian.tasker.core.fmtDate(s.date)} · ${fmtTime(s.startMin)}" + if (s.note.isBlank()) "" else " · " + s.note, modifier = Modifier.clickable { nav.navigate("tuition/${s.tuitionId}") })
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { scope.launch { app.repo.markTuitionSession(s.id, "DONE", s.note) } }) { Text("Done") }
                         OutlinedButton(onClick = { scope.launch { app.repo.markTuitionSession(s.id, "MISSED", s.note) } }) { Text("Missed") }
                         OutlinedButton(onClick = { moveT = s }) { Text("Reschedule") }
+                        OutlinedButton(onClick = { openT = s }) { Text("Note") }
                     }
                     RowDivider()
                 }
                 dueClass.take(5).forEach { s ->
                     val c = courses.firstOrNull { it.id == s.courseId }
                     Tag("CLASS")
-                    Line(c?.code ?: "Class", "Class · ${com.nahian.tasker.core.fmtDate(s.date)} · ${fmtTime(s.startMin)}")
+                    Line(c?.code ?: "Class", "Class · ${com.nahian.tasker.core.fmtDate(s.date)} · ${fmtTime(s.startMin)}" + if (s.note.isBlank()) "" else " · " + s.note, modifier = Modifier.clickable { openC = s })
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { scope.launch { app.repo.markClassSession(s.id, "ATTENDED", s.note) } }) { Text("Attended") }
                         OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(s.id, "MISSED", s.note) } }) { Text("Missed") }
                         OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(s.id, "CANCELLED", s.note) } }) { Text("Off") }
                         OutlinedButton(onClick = { moveC = s }) { Text("Reschedule") }
+                        OutlinedButton(onClick = { openC = s }) { Text("Note") }
                     }
                     RowDivider()
                 }
@@ -223,8 +239,8 @@ fun HomeScreen(nav: NavController) {
         val spent = txns.filter { it.type == "EXPENSE" && it.date == day }.sumOf { it.amount }
         val balance = txns.sumOf { if (it.type in listOf("INCOME", "LOAN_IN", "REPAY_IN")) it.amount else -it.amount }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            Stat("Spent today", money(spent), Modifier.weight(1f))
-            Stat("Balance", money(balance), Modifier.weight(1f))
+            Stat("Spent today", money(spent), Modifier.weight(1f).clickable { nav.navigate("money") })
+            Stat("Balance", money(balance), Modifier.weight(1f).clickable { nav.navigate("money") })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { nav.navigate("expenseAdd") }) { Text("Add expense") }
@@ -232,6 +248,8 @@ fun HomeScreen(nav: NavController) {
         }
     }
 
+    openT?.let { s -> TuitionSessionDialog(s) { openT = null } }
+    openC?.let { s -> ClassSessionDialog(s) { openC = null } }
     moveT?.let { s ->
         RescheduleDialog("Reschedule tuition day", s.startMin, { moveT = null }) { d, m -> scope.launch { app.repo.moveTuitionSession(s.id, d, m, "") } }
     }
