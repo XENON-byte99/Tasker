@@ -23,6 +23,9 @@ class TaskerApp : Application() {
     val dao: AppDao get() = db.dao()
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** For saves started from screens and dialogs: keeps running after the dialog or screen closes. */
+    val ui = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     override fun onCreate() {
         super.onCreate()
         db = Room.databaseBuilder(this, Db::class.java, "tasker.db").build()

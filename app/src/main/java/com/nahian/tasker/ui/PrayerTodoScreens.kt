@@ -54,7 +54,7 @@ private val PRAYER_STATUS = listOf("PRAYED" to "Prayed", "JAMAAT" to "With jamaa
 @Composable
 fun PrayerScreen() {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val day = today()
     val weekAgo = date(day).minusDays(6).toString()
     val configs by rememberFlow { app.dao.flowPrayerConfigs() }
@@ -151,7 +151,7 @@ private fun categoryLabel(c: TaskCategory, all: List<TaskCategory>): String {
 @Composable
 private fun TaskRow(t: Task, sub: String, nav: NavController) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val overdue = t.completedAt == null && t.dueDate != null && t.dueDate < today()
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Checkbox(
@@ -179,7 +179,7 @@ private fun TaskRow(t: Task, sub: String, nav: NavController) {
 @Composable
 fun TodoScreen(nav: NavController) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val tasks by rememberFlow { app.dao.flowTasks() }
     val cats by rememberFlow { app.dao.flowTaskCategories() }
     var filter by rememberSaveable { mutableStateOf("TODAY") }
@@ -272,7 +272,7 @@ fun TodoScreen(nav: NavController) {
 @Composable
 fun TaskEditScreen(nav: NavController, id: Long) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val cats by rememberFlow { app.dao.flowTaskCategories() }
     var existing by remember { mutableStateOf<Task?>(null) }
     var title by remember { mutableStateOf("") }

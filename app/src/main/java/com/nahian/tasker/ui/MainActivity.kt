@@ -122,6 +122,7 @@ fun AppRoot() {
             composable("todo") { TodoScreen(nav) }
             composable("analytics") { AnalyticsScreen(nav) }
             composable("settings") { SettingsScreen(nav) }
+            composable("calendar/{kind}") { CalendarScreen(nav, it.arguments?.getString("kind") ?: "TUITION") }
             composable("tuition/{id}") { TuitionDetailScreen(nav, it.longArg("id")) }
             composable("tuitionEdit/{id}") { TuitionEditScreen(nav, it.longArg("id")) }
             composable("courseEdit/{id}") { CourseEditScreen(nav, it.longArg("id")) }
@@ -135,7 +136,7 @@ fun AppRoot() {
 @Composable
 fun HomeScreen(nav: NavController) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val day = today()
     val reminders by rememberFlow { app.dao.flowPendingReminders() }
     val tuitions by rememberFlow { app.dao.flowTuitions() }

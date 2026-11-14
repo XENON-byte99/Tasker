@@ -64,6 +64,7 @@ fun ScheduleScreen(nav: NavController) {
     var tab by rememberSaveable { mutableStateOf("TUITIONS") }
     Screen("Schedule") {
         Choice(listOf("TUITIONS" to "Tuitions", "CLASSES" to "Classes"), tab) { tab = it }
+        OutlinedButton(onClick = { nav.navigate("calendar/" + if (tab == "TUITIONS") "TUITION" else "CLASS") }, modifier = Modifier.fillMaxWidth()) { Text("Calendar view") }
         if (tab == "TUITIONS") TuitionsTab(nav) else ClassesTab(nav)
     }
 }
@@ -71,6 +72,7 @@ fun ScheduleScreen(nav: NavController) {
 @Composable
 private fun TuitionsTab(nav: NavController) {
     val app = taskerApp()
+    val scope = app.ui
     val tuitions by rememberFlow { app.dao.flowTuitions() }
     val sets by rememberFlow { app.dao.flowSets() }
     val sessions by rememberFlow { app.dao.flowTuitionSessions() }
@@ -83,6 +85,39 @@ private fun TuitionsTab(nav: NavController) {
         Stat("Received this month", money(received), Modifier.weight(1f))
         Stat("Due to collect", money(due), Modifier.weight(1f), color = if (due > 0) Warn else Color.Unspecified)
     }
+
+    // Day tabs, the same as for classes: pick a day and mark its tuitions.
+    var day by rememberSaveable { mutableStateOf(today()) }
+    var editing by remember { mutableStateOf<TuitionSession?>(null) }
+    var moving by remember { mutableStateOf<TuitionSession?>(null) }
+    val start = date(today())
+    Choice((0..6).map { i -> start.plusDays(i.toLong()).let { it.toString() to (WEEKDAYS[it.dayOfWeek.value - 1] + " " + it.dayOfMonth) } }, day) { day = it }
+    val todays = sessions.filter { it.date == day && it.status != "MOVED" && tuitions.any { t -> t.id == it.tuitionId } }.sortedBy { it.startMin }
+    if (todays.isEmpty()) Text("No tuition on this day.", color = Muted)
+    todays.forEach { s ->
+        val t = tuitions.first { it.id == s.tuitionId }
+        SectionCard {
+            Line(
+                listOf(t.name, t.subject).filter { it.isNotBlank() }.joinToString(" · "),
+                fmtTime(s.startMin) + " · " + t.durationMin + " min",
+                when (s.status) { "DONE" -> "Done"; "MISSED" -> "Missed"; else -> "Planned" },
+                when (s.status) { "DONE" -> Teal; "MISSED" -> Warn; else -> Muted },
+            )
+            if (s.note.isNotBlank()) Text(s.note, style = MaterialTheme.typography.bodySmall)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = { scope.launch { app.repo.markTuitionSession(s.id, "DONE", s.note) } }) { Text("Done") }
+                OutlinedButton(onClick = { scope.launch { app.repo.markTuitionSession(s.id, "MISSED", s.note) } }) { Text("Missed") }
+                TextButton(onClick = { moving = s }) { Text("Reschedule") }
+                TextButton(onClick = { editing = s }) { Text("Note") }
+            }
+        }
+    }
+    editing?.let { s -> TuitionSessionDialog(s) { editing = null } }
+    moving?.let { s ->
+        RescheduleDialog("Reschedule tuition day", s.startMin, { moving = null }) { d, m -> scope.launch { app.repo.moveTuitionSession(s.id, d, m, "") } }
+    }
+
+    Text("All tuitions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
     if (tuitions.isEmpty()) Text("No tuitions yet. Add your first one to start getting reminders.", color = Muted)
     tuitions.forEach { t ->
@@ -112,7 +147,7 @@ private fun TuitionsTab(nav: NavController) {
 @Composable
 fun TuitionDetailScreen(nav: NavController, id: Long) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val tuitions by rememberFlow { app.dao.flowTuitions() }
     val allSets by rememberFlow { app.dao.flowSets() }
     val allSessions by rememberFlow { app.dao.flowTuitionSessions() }
@@ -209,7 +244,7 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
 @Composable
 private fun TuitionSessionDialog(s: TuitionSession, onDismiss: () -> Unit) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     var status by remember { mutableStateOf(s.status) }
     var note by remember { mutableStateOf(s.note) }
     var moving by remember { mutableStateOf(false) }
@@ -242,7 +277,7 @@ private fun TuitionSessionDialog(s: TuitionSession, onDismiss: () -> Unit) {
 @Composable
 fun TuitionEditScreen(nav: NavController, id: Long) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     var existing by remember { mutableStateOf<Tuition?>(null) }
     var name by remember { mutableStateOf("") }
     var subject by remember { mutableStateOf("") }
@@ -336,7 +371,7 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
 @Composable
 private fun ClassesTab(nav: NavController) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val courses by rememberFlow { app.dao.flowCourses() }
     val slots by rememberFlow { app.dao.flowSlots() }
     val sessions by rememberFlow { app.dao.flowClassSessions() }
@@ -413,7 +448,7 @@ private fun ClassesTab(nav: NavController) {
 @Composable
 fun CourseEditScreen(nav: NavController, id: Long) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     var existing by remember { mutableStateOf<Course?>(null) }
     var code by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }

@@ -197,7 +197,7 @@ class QuickActivity : ComponentActivity() {
 @Composable
 private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val reminders by rememberFlow { app.dao.flowPendingReminders() }
     val categories by rememberFlow { app.dao.flowCategories() }
     var amount by remember { mutableStateOf("") }

@@ -56,7 +56,7 @@ fun MoneyScreen(nav: NavController) {
 @Composable
 private fun ExpensesTab(nav: NavController) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val txns by rememberFlow { app.dao.flowTxns() }
     val categories by rememberFlow { app.dao.flowCategories() }
     var day by rememberSaveable { mutableStateOf(today()) }
@@ -107,7 +107,7 @@ private fun ExpensesTab(nav: NavController) {
 @Composable
 fun ExpenseAddScreen(nav: NavController) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val categories by rememberFlow { app.dao.flowCategories() }
     var amount by remember { mutableStateOf("") }
     var catId by remember { mutableStateOf<Long?>(null) }
@@ -167,7 +167,7 @@ fun ExpenseAddScreen(nav: NavController) {
 @Composable
 private fun LoansTab(nav: NavController) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val persons by rememberFlow { app.dao.flowPersons() }
     val loans by rememberFlow { app.dao.flowLoans() }
     val reps by rememberFlow { app.dao.flowRepayments() }
@@ -235,7 +235,7 @@ private fun LoansTab(nav: NavController) {
 @Composable
 fun LoanAddScreen(nav: NavController) {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val persons by rememberFlow { app.dao.flowPersons() }
     var kind by remember { mutableStateOf("BORROWED") }
     var person by remember { mutableStateOf("") }
@@ -280,7 +280,7 @@ fun LoanAddScreen(nav: NavController) {
 @Composable
 private fun IncomeTab() {
     val app = taskerApp()
-    val scope = rememberCoroutineScope()
+    val scope = app.ui
     val txns by rememberFlow { app.dao.flowTxns() }
     val income = txns.filter { it.type == "INCOME" }
     val month = today().take(7)
