@@ -157,7 +157,7 @@ fun SettingsScreen(nav: NavController) {
     var classLead by remember { mutableStateOf(prefs.classRemindMin.intValue.toString()) }
     var hint by remember { mutableStateOf("") }
 
-    Screen("Settings", onBack = { nav.popBackStack() }, accent = Color(0xFF475569), icon = SettingsIcon) {
+    Screen("Settings", onBack = { nav.popBackStack() }, accent = Color(0xFF475569), icon = Icons.Filled.SettingsIcon) {
         SectionCard("Notifications") {
             val notifOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
             val exact = ReminderScheduler.canExact(ctx)
