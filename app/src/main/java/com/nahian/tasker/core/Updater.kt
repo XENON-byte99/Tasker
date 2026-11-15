@@ -18,6 +18,7 @@ import java.net.URL
  */
 object Updater {
     private const val API = "https://api.github.com/repos/XENON-byte99/Tasker/releases/tags/latest"
+    private const val VERSION = "https://github.com/XENON-byte99/Tasker/releases/download/latest/version.txt"
     private const val APK = "https://github.com/XENON-byte99/Tasker/releases/download/latest/Tasker.apk"
 
     /** Build number of a newer version, or 0 when there is none (or it has not been checked). */
@@ -28,22 +29,41 @@ object Updater {
     fun currentBuild(ctx: Context): Int =
         PackageInfoCompat.getLongVersionCode(ctx.packageManager.getPackageInfo(ctx.packageName, 0)).toInt()
 
-    suspend fun check(ctx: Context, quiet: Boolean = false): Int = withContext(Dispatchers.IO) {
+    private fun fetch(url: String): String {
+        val c = URL(url).openConnection() as HttpURLConnection
+        c.instanceFollowRedirects = true
+        c.useCaches = false
+        c.setRequestProperty("Cache-Control", "no-cache")
+        c.connectTimeout = 10_000
+        c.readTimeout = 10_000
+        if (c.responseCode != 200) throw java.io.IOException("HTTP " + c.responseCode)
+        return c.inputStream.bufferedReader().use { it.readText() }
+    }
+
+    /**
+     * Reads the newest build number. A small text file published beside the APK is tried first,
+     * because GitHub's API limits how often one network address may ask, and mobile networks
+     * share addresses between many phones. The API is only the fallback.
+     */
+    private fun latestBuild(): Int {
         try {
-            val c = URL(API).openConnection() as HttpURLConnection
-            c.setRequestProperty("Accept", "application/vnd.github+json")
-            c.connectTimeout = 10_000
-            c.readTimeout = 10_000
-            val text = c.inputStream.bufferedReader().use { it.readText() }
-            val latest = Regex("build=(\\d+)").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            val mine = currentBuild(ctx)
+            val n = fetch("$VERSION?t=" + System.currentTimeMillis()).trim().toIntOrNull()
+            if (n != null) return n
+        } catch (e: Exception) { /* fall through to the API */ }
+        return Regex("build=(\\d+)").find(fetch(API))?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    }
+
+    suspend fun check(ctx: Context, quiet: Boolean = false): Int = withContext(Dispatchers.IO) {
+        val mine = currentBuild(ctx)
+        try {
+            val latest = latestBuild()
             val newer = if (latest > mine) latest else 0
             available.intValue = newer
             if (newer > 0) status.value = "Build $newer is available (you have build $mine)."
             else if (!quiet) status.value = "You have the latest version (build $mine)."
             newer
         } catch (e: Exception) {
-            if (!quiet) status.value = "Could not check for updates. Is the internet on?"
+            if (!quiet) status.value = "Could not check for updates (" + (e.message ?: "no connection") + "). You have build $mine."
             0
         }
     }

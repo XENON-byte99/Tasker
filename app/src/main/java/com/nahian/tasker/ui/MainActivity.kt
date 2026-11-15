@@ -78,6 +78,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent { TaskerTheme { AppRoot() } }
     }
+
+    /** Look for a newer build every time the app comes to the front, not only on a cold start. */
+    override fun onResume() {
+        super.onResume()
+        val app = application as com.nahian.tasker.TaskerApp
+        app.ui.launch { Updater.check(this@MainActivity, quiet = true) }
+    }
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector, val color: Color)
@@ -288,11 +295,17 @@ fun HomeScreen(nav: NavController) {
         }
 
         val spent = txns.filter { it.type == "EXPENSE" && it.date == day }.sumOf { it.amount }
+        val build = remember { Updater.currentBuild(ctx) }
         val balance = txns.sumOf { if (it.type in listOf("INCOME", "LOAN_IN", "REPAY_IN")) it.amount else -it.amount }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             Stat("Spent today", money(spent), Modifier.weight(1f).clickable { nav.navigate("money") })
             Stat("Balance", money(balance), Modifier.weight(1f).clickable { nav.navigate("money") })
         }
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Tasker build $build", color = Muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+            androidx.compose.material3.TextButton(onClick = { scope.launch { Updater.check(ctx) } }) { Text("Check for update") }
+        }
+        if (Updater.available.intValue == 0 && Updater.status.value.isNotEmpty()) Text(Updater.status.value, color = Muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
     }
 
     doneTask?.let { t -> CompleteTaskDialog(t) { doneTask = null } }
