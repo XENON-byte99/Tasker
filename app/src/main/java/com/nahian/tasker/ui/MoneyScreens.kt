@@ -15,6 +15,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,7 +47,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun MoneyScreen(nav: NavController) {
     var tab by rememberSaveable { mutableStateOf("EXPENSES") }
-    Screen("Money") {
+    Screen("Money", accent = moduleColor("MONEY"), icon = Icons.Filled.ShoppingCart) {
         Choice(listOf("EXPENSES" to "Expenses", "LOANS" to "Loans", "INCOME" to "Income"), tab) { tab = it }
         when (tab) {
             "EXPENSES" -> ExpensesTab(nav)

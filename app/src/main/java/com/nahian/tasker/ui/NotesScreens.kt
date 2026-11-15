@@ -10,6 +10,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,7 +38,7 @@ fun NotesScreen(nav: NavController) {
     var search by rememberSaveable { mutableStateOf("") }
     val categories = notes.map { it.category }.filter { it.isNotBlank() }.distinct().sorted()
 
-    Screen("Notes") {
+    Screen("Notes", accent = NoteColor, icon = Icons.Filled.Edit) {
         Button(onClick = { nav.navigate("noteEdit/0") }, modifier = Modifier.fillMaxWidth()) { Text("New note") }
         Field("Search notes", search, { search = it })
         if (categories.isNotEmpty()) Choice(listOf("" to "All") + categories.map { it to it }, category) { category = it }

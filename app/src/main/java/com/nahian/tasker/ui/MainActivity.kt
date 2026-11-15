@@ -32,6 +32,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -73,7 +80,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class Tab(val route: String, val label: String, val icon: ImageVector)
+private data class Tab(val route: String, val label: String, val icon: ImageVector, val color: Color)
 
 private fun NavBackStackEntry.longArg(name: String): Long = arguments?.getString(name)?.toLongOrNull() ?: 0L
 
@@ -88,12 +95,12 @@ fun AppRoot() {
         Updater.check(ctx, quiet = true)
     }
     val tabs = listOf(
-        Tab("home", "Home", Icons.Filled.Home),
-        Tab("schedule", "Schedule", Icons.Filled.DateRange),
-        Tab("money", "Money", Icons.Filled.ShoppingCart),
-        Tab("prayer", "Prayer", Icons.Filled.Star),
-        Tab("todo", "To-do", Icons.Filled.CheckCircle),
-        Tab("notes", "Notes", Icons.Filled.Edit),
+        Tab("home", "Home", Icons.Filled.Home, Teal),
+        Tab("schedule", "Schedule", Icons.Filled.DateRange, moduleColor("CLASS")),
+        Tab("money", "Money", Icons.Filled.ShoppingCart, moduleColor("MONEY")),
+        Tab("prayer", "Prayer", Icons.Filled.Star, moduleColor("PRAYER")),
+        Tab("todo", "To-do", Icons.Filled.CheckCircle, moduleColor("TASK")),
+        Tab("notes", "Notes", Icons.Filled.Edit, NoteColor),
     )
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
@@ -112,6 +119,7 @@ fun AppRoot() {
                                 }
                             },
                             icon = { Icon(t.icon, contentDescription = null) },
+                            colors = NavigationBarItemDefaults.colors(selectedIconColor = Color.White, selectedTextColor = t.color, indicatorColor = t.color),
                             label = { Text(t.label, maxLines = 1, softWrap = false, style = androidx.compose.material3.MaterialTheme.typography.labelSmall) },
                         )
                     }
@@ -119,7 +127,13 @@ fun AppRoot() {
             }
         },
     ) { pad ->
-        NavHost(nav, startDestination = "home", modifier = Modifier.padding(pad)) {
+        NavHost(
+            nav, startDestination = "home", modifier = Modifier.padding(pad),
+            enterTransition = { fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 8 } },
+            exitTransition = { fadeOut(tween(150)) },
+            popEnterTransition = { fadeIn(tween(220)) + slideInHorizontally(tween(220)) { -it / 8 } },
+            popExitTransition = { fadeOut(tween(150)) + slideOutHorizontally(tween(150)) { it / 8 } },
+        ) {
             composable("home") { HomeScreen(nav) }
             composable("schedule") { ScheduleScreen(nav) }
             composable("money") { MoneyScreen(nav) }
@@ -163,11 +177,25 @@ fun HomeScreen(nav: NavController) {
 
     Screen(
         title = "Today",
+        accent = Teal,
+        icon = Icons.Filled.Home,
         actions = {
             IconButton(onClick = { nav.navigate("analytics") }) { Icon(Icons.Filled.Info, contentDescription = "Analytics") }
             IconButton(onClick = { nav.navigate("settings") }) { Icon(Icons.Filled.Settings, contentDescription = "Settings") }
         },
     ) {
+        // Quick actions: six coloured tiles, three per row, so nothing gets squeezed.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            ActionTile("Expense", Icons.Filled.ShoppingCart, moduleColor("MONEY"), Modifier.weight(1f)) { nav.navigate("expenseAdd") }
+            ActionTile("To-do", Icons.Filled.CheckCircle, moduleColor("TASK"), Modifier.weight(1f)) { nav.navigate("taskEdit/0") }
+            ActionTile("Note", Icons.Filled.Edit, NoteColor, Modifier.weight(1f)) { nav.navigate("noteEdit/0") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            ActionTile("Tuition", Icons.Filled.Person, moduleColor("TUITION"), Modifier.weight(1f)) { nav.navigate("tuitionEdit/0") }
+            ActionTile("Class", Icons.Filled.DateRange, moduleColor("CLASS"), Modifier.weight(1f)) { nav.navigate("courseEdit/0") }
+            ActionTile("Loan", Icons.Filled.Star, Color(0xFF7C3AED), Modifier.weight(1f)) { nav.navigate("loanAdd") }
+        }
+
         if (Updater.available.intValue > 0) {
             SectionCard("Update available", container = Color(0xFFEAF4F2)) {
                 Text("Build ${Updater.available.intValue} of Tasker is ready. Your data is kept.")
@@ -264,11 +292,6 @@ fun HomeScreen(nav: NavController) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             Stat("Spent today", money(spent), Modifier.weight(1f).clickable { nav.navigate("money") })
             Stat("Balance", money(balance), Modifier.weight(1f).clickable { nav.navigate("money") })
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { nav.navigate("expenseAdd") }) { Text("Add expense") }
-            OutlinedButton(onClick = { nav.navigate("taskEdit/0") }) { Text("Add to-do") }
-            OutlinedButton(onClick = { nav.navigate("noteEdit/0") }) { Text("Add note") }
         }
     }
 

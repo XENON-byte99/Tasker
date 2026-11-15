@@ -14,6 +14,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings as SettingsIcon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -63,7 +66,7 @@ fun AnalyticsScreen(nav: NavController) {
     val logs by rememberFlow(from) { app.dao.flowPrayerLogs(from) }
     val days = (date(today()).toEpochDay() - date(from).toEpochDay() + 1).toInt()
 
-    Screen("Analytics", onBack = { nav.popBackStack() }) {
+    Screen("Analytics", onBack = { nav.popBackStack() }, accent = Color(0xFF7C3AED), icon = Icons.Filled.Info) {
         Choice(listOf("WEEK" to "Last 7 days", "MONTH" to "This month", "YEAR" to "This year"), period) { period = it }
 
         val income = txns.filter { it.type == "INCOME" && it.date >= from }.sumOf { it.amount }
@@ -154,7 +157,7 @@ fun SettingsScreen(nav: NavController) {
     var classLead by remember { mutableStateOf(prefs.classRemindMin.intValue.toString()) }
     var hint by remember { mutableStateOf("") }
 
-    Screen("Settings", onBack = { nav.popBackStack() }) {
+    Screen("Settings", onBack = { nav.popBackStack() }, accent = Color(0xFF475569), icon = SettingsIcon) {
         SectionCard("Notifications") {
             val notifOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
             val exact = ReminderScheduler.canExact(ctx)

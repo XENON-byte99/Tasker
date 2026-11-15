@@ -19,6 +19,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -75,7 +77,7 @@ fun CalendarScreen(nav: NavController, startKind: String) {
         else courses.firstOrNull { it.id == ownerId }?.let { c -> listOf(c.code, c.title).filter { it.isNotBlank() }.joinToString(" · ") } ?: "Class"
     fun good(s: String) = s == "DONE" || s == "ATTENDED"
 
-    Screen("Calendar", onBack = { nav.popBackStack() }) {
+    Screen("Calendar", onBack = { nav.popBackStack() }, accent = moduleColor(kind.let { if (it == "TUITION") "TUITION" else "CLASS" }), icon = Icons.Filled.DateRange) {
         Choice(listOf("TUITION" to "Tuitions", "CLASS" to "Classes"), kind) { kind = it; filterId = 0L }
         Dropdown(
             "Show",

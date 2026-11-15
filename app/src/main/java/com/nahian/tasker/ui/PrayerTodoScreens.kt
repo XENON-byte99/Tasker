@@ -17,6 +17,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,7 +65,7 @@ fun PrayerScreen() {
     var picking by remember { mutableStateOf<String?>(null) }
     var editTimes by remember { mutableStateOf(false) }
 
-    Screen("Prayer", actions = { TextButton(onClick = { editTimes = !editTimes }) { Text(if (editTimes) "Close" else "Times and alerts") } }) {
+    Screen("Prayer", accent = moduleColor("PRAYER"), icon = Icons.Filled.Star, actions = { TextButton(onClick = { editTimes = !editTimes }) { Text(if (editTimes) "Close" else "Times and alerts") } }) {
         Text(fmtDate(day), color = Muted)
 
         if (editTimes) {
@@ -219,7 +222,7 @@ fun TodoScreen(nav: NavController) {
     val open = tasks.filter { it.completedAt == null }
     fun label(t: Task) = cats.firstOrNull { it.id == t.categoryId }?.let { categoryLabel(it, cats) } ?: ""
 
-    Screen("To-do") {
+    Screen("To-do", accent = moduleColor("TASK"), icon = Icons.Filled.CheckCircle) {
         Choice(
             listOf(
                 "TODAY" to "Today ${open.count { it.dueDate == day }}",

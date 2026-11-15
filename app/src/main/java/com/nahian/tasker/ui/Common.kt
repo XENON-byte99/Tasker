@@ -2,7 +2,19 @@
 
 package com.nahian.tasker.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.horizontalScroll
@@ -84,12 +96,17 @@ fun TaskerTheme(content: @Composable () -> Unit) {
 @Composable
 fun taskerApp(): TaskerApp = LocalContext.current.applicationContext as TaskerApp
 
-/** Standard page: title row, optional back arrow and actions, scrolling content. */
+/**
+ * Standard page: a coloured icon badge and title, optional back arrow and actions,
+ * a gradient line in the page's colour, then scrolling content.
+ */
 @Composable
 fun Screen(
     title: String,
     onBack: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
+    accent: Color = Teal,
+    icon: ImageVector? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
@@ -101,9 +118,17 @@ fun Screen(
             if (onBack != null) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
             }
+            if (icon != null) {
+                Box(
+                    Modifier.size(42.dp).background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.65f))), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp)) }
+                Spacer(Modifier.width(10.dp))
+            }
             Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             actions()
         }
+        Box(Modifier.fillMaxWidth().height(4.dp).background(Brush.horizontalGradient(listOf(accent, accent.copy(alpha = 0.12f))), RoundedCornerShape(2.dp)))
         content()
     }
 }
@@ -128,7 +153,7 @@ fun SectionCard(title: String? = null, container: Color = Color.White, accent: C
         modifier = Modifier.fillMaxWidth(),
     ) {
         if (accent != null) Box(Modifier.fillMaxWidth().height(6.dp).background(accent))
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.animateContentSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (title != null) {
                 Text(title.uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = accent ?: Color(0xFF1F2937))
                 RowDivider()
@@ -240,16 +265,40 @@ fun moduleLabel(module: String): String = when (module) {
     else -> "Money"
 }
 
+fun moduleIcon(module: String): ImageVector = when (module) {
+    "TUITION" -> Icons.Filled.Person
+    "CLASS" -> Icons.Filled.DateRange
+    "PRAYER" -> Icons.Filled.Star
+    "TASK" -> Icons.Filled.CheckCircle
+    else -> Icons.Filled.ShoppingCart
+}
+
 @Composable
 fun Tag(module: String) {
     val c = moduleColor(module)
-    Text(
-        moduleLabel(module).uppercase(),
-        color = c,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.background(c.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
-    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.background(c.copy(alpha = 0.14f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Icon(moduleIcon(module), contentDescription = null, tint = c, modifier = Modifier.size(14.dp))
+        Text(moduleLabel(module).uppercase(), color = c, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** A solid coloured tile with an icon, used for the quick actions on Home. */
+@Composable
+fun ActionTile(label: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = color), modifier = modifier) {
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(icon, contentDescription = null, tint = Color.White)
+            Text(label, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+        }
+    }
 }
 
 /** Asks for a new day and time. The next 7 days are one tap; any other date can be typed. */

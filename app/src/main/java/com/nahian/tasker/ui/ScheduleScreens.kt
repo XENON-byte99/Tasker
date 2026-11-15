@@ -18,6 +18,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,7 +64,7 @@ private fun payLabel(t: Tuition): String = when (t.payModel) {
 @Composable
 fun ScheduleScreen(nav: NavController) {
     var tab by rememberSaveable { mutableStateOf("TUITIONS") }
-    Screen("Schedule") {
+    Screen("Schedule", accent = moduleColor("CLASS"), icon = Icons.Filled.DateRange) {
         Choice(listOf("TUITIONS" to "Tuitions", "CLASSES" to "Classes"), tab) { tab = it }
         OutlinedButton(onClick = { nav.navigate("calendar/" + if (tab == "TUITIONS") "TUITION" else "CLASS") }, modifier = Modifier.fillMaxWidth()) { Text("Calendar view") }
         if (tab == "TUITIONS") TuitionsTab(nav) else ClassesTab(nav)
