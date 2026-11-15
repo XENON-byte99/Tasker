@@ -148,15 +148,44 @@ private fun categoryLabel(c: TaskCategory, all: List<TaskCategory>): String {
     return if (parent == null) c.name else parent.name + " › " + c.name
 }
 
+/** Shown when a to-do is ticked: finish it plainly, with a short note, or with a follow-up task. */
+@Composable
+fun CompleteTaskDialog(t: Task, onDismiss: () -> Unit) {
+    val app = taskerApp()
+    var note by remember { mutableStateOf("") }
+    var next by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Done: ${t.title}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Both boxes are optional. Leave them empty to just mark it done.", style = MaterialTheme.typography.bodySmall, color = Muted)
+                Field("Short note about how it went", note, { note = it })
+                Field("Next task to start after this", next, { next = it })
+                if (t.repeatRule != "NONE") Text("This task repeats, so it moves to its next date.", style = MaterialTheme.typography.bodySmall, color = Muted)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                app.ui.launch { app.repo.completeTask(t, note, next) }
+                onDismiss()
+            }) { Text(if (next.isBlank()) "Mark done" else "Done and start next") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
 @Composable
 private fun TaskRow(t: Task, sub: String, nav: NavController) {
     val app = taskerApp()
     val scope = app.ui
+    var finishing by remember { mutableStateOf(false) }
+    if (finishing) CompleteTaskDialog(t) { finishing = false }
     val overdue = t.completedAt == null && t.dueDate != null && t.dueDate < today()
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Checkbox(
             checked = t.completedAt != null,
-            onCheckedChange = { scope.launch { if (t.completedAt == null) app.repo.completeTask(t) else app.repo.reopenTask(t) } },
+            onCheckedChange = { if (t.completedAt == null) finishing = true else scope.launch { app.repo.reopenTask(t) } },
         )
         Column(Modifier.weight(1f).clickable { nav.navigate("taskEdit/${t.id}") }.padding(vertical = 6.dp)) {
             Text(
@@ -172,6 +201,7 @@ private fun TaskRow(t: Task, sub: String, nav: NavController) {
                 listOf(if (overdue) "Overdue · $due" else due + repeat, sub).filter { it.isNotBlank() }.joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall, color = if (overdue) Warn else Muted,
             )
+            if (t.notes.isNotBlank()) Text(t.notes, style = MaterialTheme.typography.bodySmall)
         }
     }
     RowDivider()

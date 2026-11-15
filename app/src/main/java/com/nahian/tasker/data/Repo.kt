@@ -285,7 +285,13 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         dao.deleteTask(t)
     }
 
-    suspend fun completeTask(t: Task) {
+    /**
+     * Marks a task done. An optional short note is kept with the task, and an optional
+     * follow-up task is created in the same category, due today.
+     */
+    suspend fun completeTask(task: Task, note: String = "", followUp: String = "") {
+        val t = if (note.isBlank()) task else task.copy(notes = (task.notes + "\nDone: " + note.trim()).trim())
+        if (followUp.isNotBlank()) saveTask(Task(title = followUp.trim(), categoryId = task.categoryId, dueDate = today()))
         val due = t.dueDate?.let { parseDateOrNull(it) }
         val next = if (t.repeatRule != "NONE" && due != null) {
             // Repeating task: move to the next occurrence after today instead of closing it.

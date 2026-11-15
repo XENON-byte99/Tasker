@@ -154,6 +154,7 @@ fun HomeScreen(nav: NavController) {
     var moveC by remember { mutableStateOf<ClassSession?>(null) }
     var openT by remember { mutableStateOf<TuitionSession?>(null) }
     var openC by remember { mutableStateOf<ClassSession?>(null) }
+    var doneTask by remember { mutableStateOf<com.nahian.tasker.data.Task?>(null) }
 
     Screen(
         title = "Today",
@@ -194,7 +195,13 @@ fun HomeScreen(nav: NavController) {
                         Tag(r.module)
                         Line(r.title, fmtMillis(r.fireAt) + if (r.body.isNotEmpty()) " · " + r.body else "")
                     }
-                    OutlinedButton(onClick = { scope.launch { app.repo.reminderDone(r) } }) { Text("Done") }
+                    OutlinedButton(onClick = {
+                        // A to-do asks for an optional note or follow-up; everything else is done at once.
+                        scope.launch {
+                            val task = if (r.module == "TASK") app.dao.getTask(r.sourceId) else null
+                            if (task != null) doneTask = task else app.repo.reminderDone(r)
+                        }
+                    }) { Text("Done") }
                 }
                 RowDivider()
             }
@@ -252,6 +259,7 @@ fun HomeScreen(nav: NavController) {
         }
     }
 
+    doneTask?.let { t -> CompleteTaskDialog(t) { doneTask = null } }
     openT?.let { s -> TuitionSessionDialog(s) { openT = null } }
     openC?.let { s -> ClassSessionDialog(s) { openC = null } }
     moveT?.let { s ->
