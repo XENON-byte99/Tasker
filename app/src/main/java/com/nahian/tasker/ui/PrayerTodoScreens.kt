@@ -72,10 +72,10 @@ fun PrayerScreen() {
                 configs.forEach { if (it.prayer !in times) { times[it.prayer] = time24(it.timeMin); enabled[it.prayer] = it.enabled } }
             }
             SectionCard("Times and alerts", accent = moduleColor("PRAYER")) {
-                Text("Type each time in 24-hour form. A reminder fires at that time.", style = MaterialTheme.typography.bodySmall, color = Muted)
+                Text("Tap a time to change it. A reminder fires at that time.", style = MaterialTheme.typography.bodySmall, color = Muted)
                 configs.forEach { c ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Field(c.prayer, times[c.prayer] ?: "", { times[c.prayer] = it }, Modifier.weight(1f))
+                        TimeField(c.prayer, times[c.prayer] ?: "", { times[c.prayer] = it }, Modifier.weight(1f))
                         Switch(checked = enabled[c.prayer] ?: true, onCheckedChange = { enabled[c.prayer] = it })
                     }
                 }
@@ -332,10 +332,8 @@ fun TaskEditScreen(nav: NavController, id: Long) {
             listOf<Pair<Long?, String>>(null to "None") + cats.map { (it.id as Long?) to categoryLabel(it, cats) },
             catId,
         ) { catId = it }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Field("Due date (YYYY-MM-DD)", dueDate, { dueDate = it }, Modifier.weight(1.4f))
-            Field("Time (24h)", dueTime, { dueTime = it }, Modifier.weight(1f))
-        }
+        DateField("Due date (optional)", dueDate, { dueDate = it }, optional = true)
+        TimeField("Time (optional)", dueTime, { dueTime = it }, optional = true)
         Text("Repeat", style = MaterialTheme.typography.labelLarge)
         Choice(listOf("NONE" to "Never", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly"), repeat) { repeat = it }
         Text("Priority", style = MaterialTheme.typography.labelLarge)

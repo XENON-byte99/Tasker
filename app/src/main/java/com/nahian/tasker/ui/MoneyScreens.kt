@@ -139,7 +139,7 @@ fun ExpenseAddScreen(nav: NavController, id: Long = 0L) {
             listOf(today() to "Today", date(today()).minusDays(1).toString() to "Yesterday"),
             dateTxt,
         ) { dateTxt = it }
-        Field("Or type a date (YYYY-MM-DD)", dateTxt, { dateTxt = it })
+        DateField("Or pick another date", dateTxt, { dateTxt = it })
         Field("Note (optional)", note, { note = it })
         if (error.isNotEmpty()) Text(error, color = Warn)
 
@@ -277,8 +277,8 @@ fun LoanAddScreen(nav: NavController) {
         Field("Person", person, { person = it })
         if (persons.isNotEmpty()) Choice(persons.map { it.name to it.name }, person) { person = it }
         Field("Amount (৳)", amount, { amount = it }, number = true)
-        Field("Date (YYYY-MM-DD)", dateTxt, { dateTxt = it })
-        if (kind == "BORROWED" || kind == "LENT") Field("Pay back by (optional, YYYY-MM-DD)", due, { due = it })
+        DateField("Date", dateTxt, { dateTxt = it })
+        if (kind == "BORROWED" || kind == "LENT") DateField("Pay back by (optional)", due, { due = it }, optional = true)
         Field("Note (optional)", note, { note = it })
         if (error.isNotEmpty()) Text(error, color = Warn)
         Button(

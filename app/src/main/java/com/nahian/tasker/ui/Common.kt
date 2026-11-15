@@ -266,8 +266,8 @@ fun RescheduleDialog(title: String, min: Int, onDismiss: () -> Unit, onSave: (St
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Pick the new day. The original day will not be counted.", style = MaterialTheme.typography.bodySmall)
                 Choice((0..7).map { i -> start.plusDays(i.toLong()).let { it.toString() to (if (i == 0) "Today" else WEEKDAYS[it.dayOfWeek.value - 1] + " " + it.dayOfMonth) } }, d) { d = it }
-                Field("Or type a date (YYYY-MM-DD)", d, { d = it })
-                Field("Time (24h, e.g. 17:30)", t, { t = it })
+                DateField("Or pick another date", d, { d = it })
+                TimeField("Time", t, { t = it })
                 if (err.isNotEmpty()) Text(err, color = Warn)
             }
         },

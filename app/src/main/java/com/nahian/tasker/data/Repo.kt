@@ -98,7 +98,12 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         val s = dao.getTuitionSession(sessionId) ?: return
         val t = dao.getTuition(s.tuitionId) ?: return
         var setId = s.setId
-        if (status == "DONE" && s.status != "DONE") setId = openSetFor(t, s.date).id
+        if (status == "DONE" && s.status != "DONE") {
+            val set = openSetFor(t, s.date)
+            // A past day added later can be earlier than the set's start; keep the start honest.
+            if (s.date < set.startDate) dao.updateSet(set.copy(startDate = s.date))
+            setId = set.id
+        }
         dao.updateTuitionSession(s.copy(status = status, note = note, setId = setId))
         if (setId != 0L) recomputeSet(setId)
         if (s.setId != 0L && s.setId != setId) recomputeSet(s.setId)
@@ -137,6 +142,45 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         markTuitionSession(id, "DONE", note)
     }
 
+    /**
+     * For teaching that began before the app was installed: adds every scheduled weekday from
+     * [from] until yesterday as a Done day, oldest first, so sets and day counts fill up correctly.
+     */
+    suspend fun backfillTuition(tuitionId: Long, from: String): Int {
+        val t = dao.getTuition(tuitionId) ?: return 0
+        val days = t.days.split(",").mapNotNull { it.toIntOrNull() }
+        var d = parseDateOrNull(from) ?: return 0
+        val today = LocalDate.now()
+        var added = 0
+        while (d.isBefore(today)) {
+            if (d.dayOfWeek.value in days && dao.countTuitionSessions(t.id, d.toString()) == 0) {
+                val sid = dao.insertTuitionSession(TuitionSession(tuitionId = t.id, date = d.toString(), startMin = t.startMin))
+                markTuitionSession(sid, "DONE", "")
+                added++
+            }
+            d = d.plusDays(1)
+        }
+        return added
+    }
+
+    /** The same for classes: every class from [from] until yesterday is added as Attended. */
+    suspend fun backfillCourse(courseId: Long, from: String): Int {
+        val slots = dao.listSlotsOf(courseId)
+        var d = parseDateOrNull(from) ?: return 0
+        val today = LocalDate.now()
+        var added = 0
+        while (d.isBefore(today)) {
+            for (slot in slots) {
+                if (slot.weekday == d.dayOfWeek.value && dao.countClassSessions(slot.id, d.toString()) == 0) {
+                    dao.insertClassSession(ClassSession(courseId = courseId, slotId = slot.id, date = d.toString(), startMin = slot.startMin, status = "ATTENDED"))
+                    added++
+                }
+            }
+            d = d.plusDays(1)
+        }
+        return added
+    }
+
     suspend fun saveSetNote(setId: Long, note: String) {
         val set = dao.getSet(setId) ?: return
         dao.updateSet(set.copy(note = note))
@@ -151,13 +195,14 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
 
     // ---------------- University ----------------
 
-    suspend fun saveCourse(c: Course, slots: List<ClassSlot>) {
+    suspend fun saveCourse(c: Course, slots: List<ClassSlot>): Long {
         val id = if (c.id == 0L) dao.insertCourse(c) else { dao.updateCourse(c); c.id }
         dao.deletePlannedClassReminders(id, today())
         dao.deletePlannedClassSessions(id, today())
         dao.deleteSlotsOf(id)
         slots.forEach { dao.insertSlot(it.copy(id = 0, courseId = id)) }
         Planner.sync(ctx)
+        return id
     }
 
     suspend fun deleteCourse(c: Course) {

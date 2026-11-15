@@ -156,6 +156,8 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
     val sessions = allSessions.filter { it.tuitionId == id && it.status != "MOVED" }
     var editing by remember { mutableStateOf<TuitionSession?>(null) }
     var paying by remember { mutableStateOf<TuitionSet?>(null) }
+    var addDay by remember { mutableStateOf(false) }
+    var backfill by remember { mutableStateOf(false) }
 
     Screen(
         title = t?.name ?: "Tuition",
@@ -200,7 +202,10 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
         }
 
         SectionCard("Days", accent = moduleColor("TUITION")) {
-            OutlinedButton(onClick = { scope.launch { app.repo.addExtraTuitionDay(id, today(), "Extra day") } }) { Text("Add extra day (today)") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { addDay = true }) { Text("Add a day") }
+                OutlinedButton(onClick = { backfill = true }) { Text("Add past days") }
+            }
             if (sessions.isEmpty()) Text("No days yet.", color = Muted)
             sessions.take(40).forEach { s ->
                 val label = when (s.status) { "DONE" -> "Done"; "MISSED" -> "Missed · not counted"; else -> "Planned" }
@@ -223,6 +228,46 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
     }
 
     editing?.let { s -> TuitionSessionDialog(s) { editing = null } }
+    if (addDay) {
+        var d by remember { mutableStateOf(today()) }
+        AlertDialog(
+            onDismissRequest = { addDay = false },
+            title = { Text("Add a day") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Adds one taught day on the date you pick and counts it as Done.", style = MaterialTheme.typography.bodySmall)
+                    DateField("Date", d, { d = it })
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    parseDateOrNull(d)?.let { pd -> scope.launch { app.repo.addExtraTuitionDay(id, pd.toString(), "") } }
+                    addDay = false
+                }) { Text("Add") }
+            },
+            dismissButton = { TextButton(onClick = { addDay = false }) { Text("Cancel") } },
+        )
+    }
+    if (backfill) {
+        var d by remember { mutableStateOf(today().take(8) + "01") }
+        AlertDialog(
+            onDismissRequest = { backfill = false },
+            title = { Text("Add past days") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Pick the day you started teaching. Every scheduled day from then until yesterday is added as Done and counted. Afterwards, tap any day you missed and change it.", style = MaterialTheme.typography.bodySmall)
+                    DateField("Started teaching on", d, { d = it })
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    parseDateOrNull(d)?.let { pd -> scope.launch { app.repo.backfillTuition(id, pd.toString()) } }
+                    backfill = false
+                }) { Text("Add days") }
+            },
+            dismissButton = { TextButton(onClick = { backfill = false }) { Text("Cancel") } },
+        )
+    }
     paying?.let { s ->
         var amount by remember(s.id) { mutableStateOf(((s.fee - s.paidAmount).coerceAtLeast(0L) / 100).toString()) }
         AlertDialog(
@@ -322,6 +367,7 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
     var remind by remember { mutableStateOf("30") }
     var persistent by remember { mutableStateOf(true) }
     var note by remember { mutableStateOf("") }
+    var since by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
 
     LaunchedEffect(id) {
@@ -351,7 +397,7 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Field("Start (24h)", start, { start = it }, Modifier.weight(1f))
+            TimeField("Start time", start, { start = it }, Modifier.weight(1f))
             Field("Minutes long", duration, { duration = it }, Modifier.weight(1f), number = true)
         }
         Text("Payment", style = MaterialTheme.typography.labelLarge)
@@ -362,6 +408,8 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
         }
         Field("Remind me this many minutes before", remind, { remind = it }, number = true)
         SwitchRow("Keep popping up until I respond", persistent, "Every 5 minutes, up to 6 times") { persistent = it }
+        DateField("Already teaching since (optional)", since, { since = it }, optional = true)
+        Text("If you pick a date, every scheduled day from then until yesterday is added as Done. You can change any day you missed afterwards.", style = MaterialTheme.typography.bodySmall, color = Muted)
         Field("Address, phone or note (optional)", note, { note = it })
         if (error.isNotEmpty()) Text(error, color = Warn)
 
@@ -375,7 +423,7 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
                     else -> ""
                 }
                 if (error.isEmpty() && startMin != null) scope.launch {
-                    app.repo.saveTuition(
+                    val savedId = app.repo.saveTuition(
                         (existing ?: Tuition(name = "")).copy(
                             name = name.trim(), subject = subject.trim(), days = days.sorted().joinToString(","),
                             startMin = startMin, durationMin = duration.toIntOrNull() ?: 90, payModel = payModel,
@@ -383,6 +431,7 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
                             remindBeforeMin = remind.toIntOrNull() ?: 30, persistent = persistent, note = note,
                         )
                     )
+                    parseDateOrNull(since)?.let { app.repo.backfillTuition(savedId, it.toString()) }
                     nav.popBackStack()
                 }
             },
@@ -493,6 +542,7 @@ fun CourseEditScreen(nav: NavController, id: Long) {
     var end by remember { mutableStateOf("11:20") }
     var room by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("THEORY") }
+    var since by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
 
     LaunchedEffect(id) {
@@ -520,8 +570,8 @@ fun CourseEditScreen(nav: NavController, id: Long) {
             HorizontalDivider()
             Choice(listOf(6, 7, 1, 2, 3, 4, 5).map { it to WEEKDAYS[it - 1] }, weekday) { weekday = it }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field("Starts (24h)", start, { start = it }, Modifier.weight(1f))
-                Field("Ends (24h)", end, { end = it }, Modifier.weight(1f))
+                TimeField("Starts", start, { start = it }, Modifier.weight(1f))
+                TimeField("Ends", end, { end = it }, Modifier.weight(1f))
             }
             Field("Room", room, { room = it })
             Choice(listOf("THEORY" to "Theory", "LAB" to "Lab"), type) { type = it }
@@ -534,6 +584,8 @@ fun CourseEditScreen(nav: NavController, id: Long) {
                 }
             }) { Text("Add this class time") }
         }
+        DateField("Classes already running since (optional)", since, { since = it }, optional = true)
+        Text("If you pick a date, every class from then until yesterday is added as Attended. Change the ones you missed in the calendar.", style = MaterialTheme.typography.bodySmall, color = Muted)
         if (error.isNotEmpty()) Text(error, color = Warn)
 
         Button(
@@ -544,10 +596,11 @@ fun CourseEditScreen(nav: NavController, id: Long) {
                     else -> ""
                 }
                 if (error.isEmpty()) scope.launch {
-                    app.repo.saveCourse(
+                    val savedId = app.repo.saveCourse(
                         (existing ?: Course(code = "")).copy(code = code.trim(), title = title.trim(), teacher = teacher.trim(), minAttendance = minAtt.toIntOrNull() ?: 75),
                         slots.toList(),
                     )
+                    parseDateOrNull(since)?.let { app.repo.backfillCourse(savedId, it.toString()) }
                     nav.popBackStack()
                 }
             },
