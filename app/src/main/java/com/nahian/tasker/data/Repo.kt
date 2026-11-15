@@ -233,28 +233,42 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
     private suspend fun repay(p: Person, direction: String, amount: Long, date: String, note: String) {
         var left = amount
         val reps = dao.listRepayments()
+        val out = direction == "TAKEN"
         for (l in dao.openLoans(p.id, direction)) {
             if (left <= 0) break
             val outstanding = l.principal - reps.filter { it.loanId == l.id }.sumOf { it.amount }
             if (outstanding <= 0) { dao.updateLoan(l.copy(status = "CLEARED")); continue }
             val pay = minOf(outstanding, left)
             dao.insertRepayment(LoanRepayment(loanId = l.id, amount = pay, date = date, note = note))
+            // One ledger line per loan, linked to it, so deleting a wrong loan also removes its payments.
+            dao.insertTxn(
+                Txn(
+                    date = date, amount = pay, type = if (out) "REPAY_OUT" else "REPAY_IN",
+                    note = if (out) "Paid back ${p.name}" else "Got back from ${p.name}", sourceType = "LOAN", sourceId = l.id,
+                )
+            )
             if (pay == outstanding) {
                 dao.updateLoan(l.copy(status = "CLEARED"))
                 dao.completeReminderByKey("LOAN:${l.id}")
             }
             left -= pay
         }
-        val paid = amount - left
-        if (paid > 0) {
-            val out = direction == "TAKEN"
-            dao.insertTxn(
-                Txn(
-                    date = date, amount = paid, type = if (out) "REPAY_OUT" else "REPAY_IN",
-                    note = if (out) "Paid back ${p.name}" else "Got back from ${p.name}", sourceType = "LOAN",
-                )
-            )
+    }
+
+    /** Removes a wrongly entered loan together with its repayments and ledger lines. */
+    suspend fun deleteLoan(l: Loan) {
+        dao.deleteTxnsBySource("LOAN", l.id)
+        dao.deleteRepaymentsOf(l.id)
+        dao.deleteReminderByKey("LOAN:${l.id}")
+        dao.deleteLoan(l)
+    }
+
+    /** Removes an income line. A tuition payment goes back to unpaid on its set. */
+    suspend fun deleteIncome(t: Txn) {
+        if (t.sourceType == "TUITION_SET") {
+            dao.getSet(t.sourceId)?.let { dao.updateSet(it.copy(paidAmount = maxOf(0L, it.paidAmount - t.amount))) }
         }
+        dao.deleteTxn(t)
     }
 
     // ---------------- Prayer ----------------

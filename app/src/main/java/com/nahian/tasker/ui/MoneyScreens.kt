@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,7 @@ import com.nahian.tasker.core.parseMoney
 import com.nahian.tasker.core.today
 import com.nahian.tasker.data.ExpenseCategory
 import com.nahian.tasker.data.Loan
+import com.nahian.tasker.data.Txn
 import kotlinx.coroutines.launch
 
 @Composable
@@ -96,8 +98,9 @@ private fun ExpensesTab(nav: NavController) {
                     t.note.ifBlank { categories.firstOrNull { it.id == t.categoryId }?.name ?: "Expense" },
                     categories.firstOrNull { it.id == t.categoryId }?.name ?: "",
                     money(t.amount),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).clickable { nav.navigate("expenseEdit/${t.id}") },
                 )
+                TextButton(onClick = { nav.navigate("expenseEdit/${t.id}") }) { Text("Edit") }
                 ConfirmButton("Delete", "Delete this expense of ${money(t.amount)}? This cannot be undone.") { scope.launch { app.dao.deleteTxn(t) } }
             }
             RowDivider()
@@ -106,7 +109,7 @@ private fun ExpensesTab(nav: NavController) {
 }
 
 @Composable
-fun ExpenseAddScreen(nav: NavController) {
+fun ExpenseAddScreen(nav: NavController, id: Long = 0L) {
     val app = taskerApp()
     val scope = app.ui
     val categories by rememberFlow { app.dao.flowCategories() }
@@ -116,8 +119,17 @@ fun ExpenseAddScreen(nav: NavController) {
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var newCat by remember { mutableStateOf<String?>(null) }
+    var existing by remember { mutableStateOf<Txn?>(null) }
 
-    Screen("New expense", onBack = { nav.popBackStack() }) {
+    LaunchedEffect(id) {
+        if (id != 0L) app.dao.getTxn(id)?.let { t ->
+            existing = t
+            amount = if (t.amount % 100 == 0L) (t.amount / 100).toString() else (t.amount / 100.0).toString()
+            catId = t.categoryId; dateTxt = t.date; note = t.note
+        }
+    }
+
+    Screen(if (id == 0L) "New expense" else "Edit expense", onBack = { nav.popBackStack() }) {
         Field("Amount (৳)", amount, { amount = it }, number = true)
         Text("Category", style = MaterialTheme.typography.labelLarge)
         Choice(categories.map { it.id as Long? to it.name }, catId ?: categories.firstOrNull()?.id) { catId = it }
@@ -140,12 +152,15 @@ fun ExpenseAddScreen(nav: NavController) {
                 else -> ""
             }
             if (a != null && d != null) scope.launch {
-                app.repo.addExpense(a, catId ?: categories.firstOrNull()?.id, d.toString(), note.trim())
+                val old = existing
+                val cat = catId ?: categories.firstOrNull()?.id
+                if (old != null) app.dao.updateTxn(old.copy(amount = a, categoryId = cat, date = d.toString(), note = note.trim()))
+                else app.repo.addExpense(a, cat, d.toString(), note.trim())
                 if (thenClose) nav.popBackStack() else { amount = ""; note = "" }
             }
         }
         Button(onClick = { save(true) }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
-        OutlinedButton(onClick = { save(false) }, modifier = Modifier.fillMaxWidth()) { Text("Save and add another") }
+        if (id == 0L) OutlinedButton(onClick = { save(false) }, modifier = Modifier.fillMaxWidth()) { Text("Save and add another") }
     }
 
     newCat?.let { text ->
@@ -227,6 +242,16 @@ private fun LoansTab(nav: NavController) {
                 },
                 when { net < 0 -> Warn; net > 0 -> Teal; else -> Muted },
             )
+            mine.forEach { l ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Line(
+                        (if (l.direction == "TAKEN") "Borrowed " else "Lent ") + money(l.principal),
+                        fmtDate(l.date) + " · left " + money(outstanding(l.id, l.principal)) + if (l.note.isBlank()) "" else " · " + l.note,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ConfirmButton("Delete", "Delete this loan of ${money(l.principal)} and its repayments? Use this for a wrong entry.") { scope.launch { app.repo.deleteLoan(l) } }
+                }
+            }
             HorizontalDivider()
         }
     }
@@ -295,7 +320,10 @@ private fun IncomeTab() {
     SectionCard("Income history", accent = moduleColor("MONEY")) {
         if (income.isEmpty()) Text("Tuition payments you record appear here.", color = Muted)
         income.take(60).forEach { t ->
-            Line(t.note.ifBlank { "Income" }, fmtDate(t.date), money(t.amount), Teal, Modifier.clickable { })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Line(t.note.ifBlank { "Income" }, fmtDate(t.date), money(t.amount), Teal, Modifier.weight(1f))
+                ConfirmButton("Delete", "Delete this income of ${money(t.amount)}? If it is a tuition payment, that set goes back to unpaid.") { scope.launch { app.repo.deleteIncome(t) } }
+            }
             RowDivider()
         }
     }

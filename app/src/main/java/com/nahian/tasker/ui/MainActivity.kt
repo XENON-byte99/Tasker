@@ -130,6 +130,7 @@ fun AppRoot() {
             composable("tuitionEdit/{id}") { TuitionEditScreen(nav, it.longArg("id")) }
             composable("courseEdit/{id}") { CourseEditScreen(nav, it.longArg("id")) }
             composable("expenseAdd") { ExpenseAddScreen(nav) }
+            composable("expenseEdit/{id}") { ExpenseAddScreen(nav, it.longArg("id")) }
             composable("loanAdd") { LoanAddScreen(nav) }
             composable("taskEdit/{id}") { TaskEditScreen(nav, it.longArg("id")) }
         }

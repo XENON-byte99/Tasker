@@ -83,6 +83,9 @@ interface AppDao {
     // ---- Money ----
     @Insert suspend fun insertTxn(t: Txn): Long
     @Delete suspend fun deleteTxn(t: Txn)
+    @Update suspend fun updateTxn(t: Txn)
+    @Query("SELECT * FROM txn WHERE id = :id") suspend fun getTxn(id: Long): Txn?
+    @Query("DELETE FROM txn WHERE sourceType = :type AND sourceId = :id") suspend fun deleteTxnsBySource(type: String, id: Long)
     @Query("SELECT * FROM txn ORDER BY date DESC, id DESC") fun flowTxns(): Flow<List<Txn>>
 
     @Insert suspend fun insertCategory(c: ExpenseCategory): Long
@@ -95,6 +98,8 @@ interface AppDao {
 
     @Insert suspend fun insertLoan(l: Loan): Long
     @Update suspend fun updateLoan(l: Loan)
+    @Delete suspend fun deleteLoan(l: Loan)
+    @Query("DELETE FROM loan_repayment WHERE loanId = :loanId") suspend fun deleteRepaymentsOf(loanId: Long)
     @Query("SELECT * FROM loan ORDER BY date DESC") fun flowLoans(): Flow<List<Loan>>
     @Query("SELECT * FROM loan WHERE personId = :pid AND direction = :dir AND status = 'OPEN' ORDER BY CASE WHEN dueDate IS NULL THEN 1 ELSE 0 END, dueDate, date")
     suspend fun openLoans(pid: Long, dir: String): List<Loan>
