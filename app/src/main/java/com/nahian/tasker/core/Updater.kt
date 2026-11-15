@@ -19,7 +19,7 @@ import java.net.URL
 object Updater {
     private const val API = "https://api.github.com/repos/XENON-byte99/Tasker/releases/tags/latest"
     private const val VERSION = "https://github.com/XENON-byte99/Tasker/releases/download/latest/version.txt"
-    private const val APK = "https://github.com/XENON-byte99/Tasker/releases/download/latest/Tasker.apk"
+    const val APK = "https://github.com/XENON-byte99/Tasker/releases/download/latest/Tasker.apk"
 
     /** Build number of a newer version, or 0 when there is none (or it has not been checked). */
     val available = mutableIntStateOf(0)

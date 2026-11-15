@@ -232,6 +232,9 @@ fun SettingsScreen(nav: NavController) {
                 }
             }
             if (Updater.status.value.isNotEmpty()) Text(Updater.status.value, color = Muted)
+            // A fallback that does not depend on the in-app check at all.
+            OutlinedButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Updater.APK))) }) { Text("Download latest in browser") }
+            Text("If the check ever fails, this downloads the newest Tasker directly. Open the downloaded file to install it over this one; your data is kept.", style = MaterialTheme.typography.bodySmall, color = Muted)
         }
 
         SectionCard("Account and sync") {
