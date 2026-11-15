@@ -127,7 +127,7 @@ private fun TuitionsTab(nav: NavController) {
         val done = if (open == null) 0 else sessions.count { it.setId == open.id && it.status == "DONE" }
         val unpaid = sets.filter { it.tuitionId == t.id && it.status == "COMPLETE" }.sumOf { maxOf(0L, it.fee - it.paidAmount) }
         val next = sessions.filter { it.tuitionId == t.id && it.status == "PLANNED" && it.date >= today() }.minByOrNull { it.date }
-        SectionCard(container = if (unpaid > 0) Color(0xFFFFF6EC) else Color.White, accent = moduleColor("TUITION")) {
+        SectionCard(container = if (unpaid > 0) WarnBg else CardBg, accent = moduleColor("TUITION")) {
             Column(Modifier.fillMaxWidth().clickable { nav.navigate("tuition/${t.id}") }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Line(
                     listOf(t.name, t.subject).filter { it.isNotBlank() }.joinToString(" · "),
@@ -193,7 +193,7 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
 
         val unpaid = sets.filter { it.status == "COMPLETE" && it.fee > it.paidAmount }
         if (unpaid.isNotEmpty()) {
-            SectionCard("Payment due", container = Color(0xFFFFF6EC)) {
+            SectionCard("Payment due", container = WarnBg) {
                 unpaid.forEach { s ->
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Line("Set ${s.number}", "Fee ${money(s.fee)} · paid ${money(s.paidAmount)}", modifier = Modifier.weight(1f))

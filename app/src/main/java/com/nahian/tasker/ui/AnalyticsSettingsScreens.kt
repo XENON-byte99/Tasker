@@ -66,7 +66,7 @@ fun AnalyticsScreen(nav: NavController) {
     val logs by rememberFlow(from) { app.dao.flowPrayerLogs(from) }
     val days = (date(today()).toEpochDay() - date(from).toEpochDay() + 1).toInt()
 
-    Screen("Analytics", onBack = { nav.popBackStack() }, accent = Color(0xFF7C3AED), icon = Icons.Filled.Info) {
+    Screen("Analytics", onBack = { nav.popBackStack() }, accent = moduleColor("PRAYER"), icon = Icons.Filled.Info) {
         Choice(listOf("WEEK" to "Last 7 days", "MONTH" to "This month", "YEAR" to "This year"), period) { period = it }
 
         val income = txns.filter { it.type == "INCOME" && it.date >= from }.sumOf { it.amount }
@@ -122,7 +122,7 @@ fun AnalyticsScreen(nav: NavController) {
                 val m = cSessions.count { it.courseId == c.id && it.status == "MISSED" && it.date >= from }
                 val pct = if (a + m == 0) null else a * 100 / (a + m)
                 Line(c.code, "$a attended · $m missed", if (pct == null) "No data" else "$pct%", if (pct != null && pct < c.minAttendance) Warn else Teal)
-                if (pct != null) LinearProgressIndicator(progress = { pct / 100f }, modifier = Modifier.fillMaxWidth(), color = if (pct < c.minAttendance) Color(0xFFB4530A) else Teal)
+                if (pct != null) LinearProgressIndicator(progress = { pct / 100f }, modifier = Modifier.fillMaxWidth(), color = if (pct < c.minAttendance) Warn else Teal)
             }
         }
 
@@ -157,7 +157,12 @@ fun SettingsScreen(nav: NavController) {
     var classLead by remember { mutableStateOf(prefs.classRemindMin.intValue.toString()) }
     var hint by remember { mutableStateOf("") }
 
-    Screen("Settings", onBack = { nav.popBackStack() }, accent = Color(0xFF475569), icon = Icons.Filled.SettingsIcon) {
+    Screen("Settings", onBack = { nav.popBackStack() }, accent = NoteColor, icon = Icons.Filled.SettingsIcon) {
+        SectionCard("Design") {
+            Text("Pick the look of the whole app. You can change it any time.", style = MaterialTheme.typography.bodySmall, color = Muted)
+            Choice(Skins.all.map { it.id to it.label }, Skins.current.id) { prefs.setSkin(it) }
+        }
+
         SectionCard("Notifications") {
             val notifOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
             val exact = ReminderScheduler.canExact(ctx)

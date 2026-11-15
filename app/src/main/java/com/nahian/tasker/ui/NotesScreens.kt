@@ -28,7 +28,7 @@ import com.nahian.tasker.core.fmtMillis
 import com.nahian.tasker.data.Note
 import kotlinx.coroutines.launch
 
-val NoteColor = Color(0xFF475569)
+val NoteColor: Color get() = if (Skins.current.dark) Color(0xFFCBD5E1) else Color(0xFF475569)
 
 @Composable
 fun NotesScreen(nav: NavController) {

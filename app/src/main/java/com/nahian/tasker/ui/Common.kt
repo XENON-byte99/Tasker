@@ -51,6 +51,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.Shapes
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
@@ -73,21 +76,32 @@ import com.nahian.tasker.core.time24
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
-val Teal = Color(0xFF0F6E66)
-val Warn = Color(0xFF8A3F06)
-val Muted = Color(0xFF5B6472)
-
 @Composable
 fun TaskerTheme(content: @Composable () -> Unit) {
+    val s = Skins.current
+    val scheme = if (s.dark) darkColorScheme(
+        primary = s.accent, onPrimary = s.onAccent, secondary = s.accent, onSecondary = s.onAccent, tertiary = s.warn,
+        background = s.bgColor, onBackground = s.text, surface = s.card, onSurface = s.text,
+        surfaceVariant = s.chipBg, onSurfaceVariant = s.muted,
+        primaryContainer = s.accentBg, onPrimaryContainer = s.text, secondaryContainer = s.accentBg, onSecondaryContainer = s.text,
+        outline = s.border, outlineVariant = s.divider, error = s.warn,
+        surfaceContainerLowest = s.bgColor, surfaceContainerLow = s.card, surfaceContainer = s.card,
+        surfaceContainerHigh = s.card, surfaceContainerHighest = s.chipBg,
+    ) else lightColorScheme(
+        primary = s.accent, onPrimary = s.onAccent, secondary = s.accent, onSecondary = s.onAccent, tertiary = s.warn,
+        background = s.bgColor, onBackground = s.text, surface = s.card, onSurface = s.text,
+        surfaceVariant = s.chipBg, onSurfaceVariant = s.muted,
+        primaryContainer = s.accentBg, onPrimaryContainer = s.text, secondaryContainer = s.accentBg, onSecondaryContainer = s.text,
+        outline = s.border, outlineVariant = s.divider, error = s.warn,
+        surfaceContainerLowest = s.bgColor, surfaceContainerLow = s.card, surfaceContainer = s.card,
+        surfaceContainerHigh = s.card, surfaceContainerHighest = s.chipBg,
+    )
     MaterialTheme(
-        colorScheme = lightColorScheme(
-            primary = Teal,
-            secondary = Teal,
-            tertiary = Color(0xFFB4530A),
-            background = Color(0xFFECEFF3),
-            surface = Color.White,
-            surfaceVariant = Color(0xFFE7EAEE),
-            secondaryContainer = Color(0xFFCFE6E2),
+        colorScheme = scheme,
+        shapes = Shapes(
+            extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp),
+            medium = RoundedCornerShape(s.radius.dp), large = RoundedCornerShape(s.radius.dp),
+            extraLarge = RoundedCornerShape((s.radius + 4).dp),
         ),
         content = content,
     )
@@ -110,7 +124,7 @@ fun Screen(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding()
+        Modifier.fillMaxSize().background(Skins.current.bg).imePadding()
             .verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -122,7 +136,7 @@ fun Screen(
                 Box(
                     Modifier.size(42.dp).background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.65f))), CircleShape),
                     contentAlignment = Alignment.Center,
-                ) { Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp)) }
+                ) { Icon(icon, contentDescription = null, tint = if (accent.luminance() > 0.5f) Color.Black else Color.White, modifier = Modifier.size(24.dp)) }
                 Spacer(Modifier.width(10.dp))
             }
             Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -133,11 +147,10 @@ fun Screen(
     }
 }
 
-val CardBorder = Color(0xFFC3CAD4)
 
 @Composable
 fun RowDivider() {
-    HorizontalDivider(color = Color(0xFFD5DAE1))
+    HorizontalDivider(color = Skins.current.divider)
 }
 
 /**
@@ -145,17 +158,19 @@ fun RowDivider() {
  * title, so each kind of content (tuition, class, prayer, to-do, money) is easy to tell apart.
  */
 @Composable
-fun SectionCard(title: String? = null, container: Color = Color.White, accent: Color? = null, content: @Composable ColumnScope.() -> Unit) {
+fun SectionCard(title: String? = null, container: Color = CardBg, accent: Color? = null, content: @Composable ColumnScope.() -> Unit) {
+    val skin = Skins.current
     Card(
-        colors = CardDefaults.cardColors(containerColor = container),
-        border = BorderStroke(1.dp, CardBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = container, contentColor = skin.text),
+        border = BorderStroke(1.dp, skin.border),
+        elevation = CardDefaults.cardElevation(defaultElevation = skin.elevation.dp),
+        shape = RoundedCornerShape(skin.radius.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        if (accent != null) Box(Modifier.fillMaxWidth().height(6.dp).background(accent))
-        Column(Modifier.animateContentSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (accent != null) Box(Modifier.fillMaxWidth().height(5.dp).background(accent))
+        Column(Modifier.animateContentSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (title != null) {
-                Text(title.uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = accent ?: Color(0xFF1F2937))
+                Text(title.uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = accent ?: skin.text)
                 RowDivider()
             }
             content()
@@ -208,14 +223,16 @@ fun <T> Dropdown(label: String, options: List<Pair<T, String>>, selected: T, onS
 
 @Composable
 fun Stat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) {
+    val skin = Skins.current
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, CardBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = skin.card, contentColor = skin.text),
+        border = BorderStroke(1.dp, skin.border),
+        elevation = CardDefaults.cardElevation(defaultElevation = skin.elevation.dp),
+        shape = RoundedCornerShape(skin.radius.dp),
         modifier = modifier,
     ) {
-        Column(Modifier.padding(14.dp)) {
-            Text(label, style = MaterialTheme.typography.bodySmall, color = Muted)
+        Column(Modifier.padding(16.dp)) {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = skin.muted)
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color)
         }
     }
@@ -247,15 +264,6 @@ fun Line(title: String, sub: String = "", trailing: String = "", trailingColor: 
 @Composable
 fun <T> rememberFlow(vararg keys: Any?, block: () -> Flow<List<T>>): State<List<T>> =
     remember(*keys) { block() }.collectAsState(emptyList())
-
-/** One colour per kind of item, so tuition, classes, prayer, to-do and money are easy to tell apart. */
-fun moduleColor(module: String): Color = when (module) {
-    "TUITION" -> Color(0xFF0F6E66)
-    "CLASS" -> Color(0xFF1D4ED8)
-    "PRAYER" -> Color(0xFF7C3AED)
-    "TASK" -> Color(0xFFB4530A)
-    else -> Color(0xFFBE185D)
-}
 
 fun moduleLabel(module: String): String = when (module) {
     "TUITION" -> "Tuition"

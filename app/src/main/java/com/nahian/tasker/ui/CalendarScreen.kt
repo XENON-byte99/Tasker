@@ -44,10 +44,10 @@ import java.util.Locale
 
 private data class CalItem(val id: Long, val ownerId: Long, val date: String, val startMin: Int, val status: String, val note: String)
 
-private val GoodBg = Color(0xFFCFE6E2)
-private val MissedBg = Color(0xFFFBE3CC)
-private val PlannedBg = Color(0xFFE7EAEE)
-private val OffBg = Color(0xFFEFEDFF)
+private val GoodBg: Color get() = Skins.current.goodBg
+private val MissedBg: Color get() = Skins.current.warnBg
+private val PlannedBg: Color get() = Skins.current.chipBg
+private val OffBg: Color get() = Skins.current.offBg
 
 /** Month calendar for tuitions or classes: all together, or one student / one course. */
 @Composable
@@ -132,7 +132,7 @@ fun CalendarScreen(nav: NavController, startKind: String) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("$dayNum", fontWeight = if (ds == today()) FontWeight.Bold else FontWeight.Normal, color = if (ds == today()) Teal else Color.Unspecified)
                                     if (dayItems.isNotEmpty()) {
-                                        Text("${dayItems.count { good(it.status) }}/${dayItems.size}", style = MaterialTheme.typography.labelSmall, color = Color(0xFF3D4552))
+                                        Text("${dayItems.count { good(it.status) }}/${dayItems.size}", style = MaterialTheme.typography.labelSmall, color = Muted)
                                     }
                                 }
                             }

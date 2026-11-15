@@ -27,6 +27,29 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
+import androidx.core.view.WindowCompat
+import com.nahian.tasker.data.Reminder
+import kotlinx.coroutines.delay
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,7 +99,17 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { TaskerTheme { AppRoot() } }
+        setContent {
+            val skin = Skins.current
+            SideEffect {
+                window.statusBarColor = skin.bgColor.toArgb()
+                window.navigationBarColor = skin.bgColor.toArgb()
+                val bars = WindowCompat.getInsetsController(window, window.decorView)
+                bars.isAppearanceLightStatusBars = !skin.dark
+                bars.isAppearanceLightNavigationBars = !skin.dark
+            }
+            TaskerTheme { AppRoot() }
+        }
     }
 
     /** Look for a newer build every time the app comes to the front, not only on a cold start. */
@@ -113,26 +146,8 @@ fun AppRoot() {
     val route = entry?.destination?.route
 
     Scaffold(
-        bottomBar = {
-            if (tabs.any { it.route == route }) {
-                NavigationBar(containerColor = Color.White) {
-                    tabs.forEach { t ->
-                        NavigationBarItem(
-                            selected = route == t.route,
-                            onClick = {
-                                nav.navigate(t.route) {
-                                    popUpTo("home")
-                                    launchSingleTop = true
-                                }
-                            },
-                            icon = { Icon(t.icon, contentDescription = null) },
-                            colors = NavigationBarItemDefaults.colors(selectedIconColor = Color.White, selectedTextColor = t.color, indicatorColor = t.color),
-                            label = { Text(t.label, maxLines = 1, softWrap = false, style = androidx.compose.material3.MaterialTheme.typography.labelSmall) },
-                        )
-                    }
-                }
-            }
-        },
+        containerColor = Skins.current.bgColor,
+        bottomBar = { if (tabs.any { it.route == route }) FloatingBar(tabs, route, nav) },
     ) { pad ->
         NavHost(
             nav, startDestination = "home", modifier = Modifier.padding(pad),
@@ -191,20 +206,36 @@ fun HomeScreen(nav: NavController) {
             IconButton(onClick = { nav.navigate("settings") }) { Icon(Icons.Filled.Settings, contentDescription = "Settings") }
         },
     ) {
-        // Quick actions: six coloured tiles, three per row, so nothing gets squeezed.
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            ActionTile("Expense", Icons.Filled.ShoppingCart, moduleColor("MONEY"), Modifier.weight(1f)) { nav.navigate("expenseAdd") }
-            ActionTile("To-do", Icons.Filled.CheckCircle, moduleColor("TASK"), Modifier.weight(1f)) { nav.navigate("taskEdit/0") }
-            ActionTile("Note", Icons.Filled.Edit, NoteColor, Modifier.weight(1f)) { nav.navigate("noteEdit/0") }
+        // The single most important thing right now, with a live countdown.
+        val tick by produceState(0) { while (true) { delay(30_000); value = value + 1 } }
+        val nowMs = remember(tick, reminders) { System.currentTimeMillis() }
+        val soon = reminders.filter { it.fireAt < nowMs + 24 * 60 * 60_000L }
+        fun openReminder(r: Reminder) {
+            when (r.module) {
+                "TUITION" -> openT = tSessions.firstOrNull { it.id == r.sourceId }
+                "CLASS" -> openC = cSessions.firstOrNull { it.id == r.sourceId }
+                "TASK" -> nav.navigate("taskEdit/${r.sourceId}")
+                "PRAYER" -> nav.navigate("prayer")
+                else -> nav.navigate("money")
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            ActionTile("Tuition", Icons.Filled.Person, moduleColor("TUITION"), Modifier.weight(1f)) { nav.navigate("tuitionEdit/0") }
-            ActionTile("Class", Icons.Filled.DateRange, moduleColor("CLASS"), Modifier.weight(1f)) { nav.navigate("courseEdit/0") }
-            ActionTile("Loan", Icons.Filled.Star, Color(0xFF7C3AED), Modifier.weight(1f)) { nav.navigate("loanAdd") }
+        fun finishReminder(r: Reminder) {
+            // A to-do asks for an optional note or follow-up; everything else is done at once.
+            scope.launch {
+                val task = if (r.module == "TASK") app.dao.getTask(r.sourceId) else null
+                if (task != null) doneTask = task else app.repo.reminderDone(r)
+            }
         }
+        val tToday = tSessions.filter { it.date == day && it.status != "MOVED" }
+        val cToday = cSessions.filter { it.date == day && it.status != "MOVED" }
+        val doneCount = tToday.count { it.status == "DONE" } + cToday.count { it.status == "ATTENDED" } + logs.count { it.date == day && it.status != "MISSED" }
+        HeroCard(
+            r = soon.firstOrNull(), nowMs = nowMs, doneCount = doneCount, total = tToday.size + cToday.size + PRAYERS.size,
+            onOpen = { openReminder(it) }, onDone = { finishReminder(it) }, onLater = { r -> scope.launch { app.repo.snooze(r) } },
+        )
 
         if (Updater.available.intValue > 0) {
-            SectionCard("Update available", container = Color(0xFFEAF4F2)) {
+            SectionCard("Update available", container = AccentBg) {
                 Text("Build ${Updater.available.intValue} of Tasker is ready. Your data is kept.")
                 Button(onClick = { scope.launch { Updater.downloadAndInstall(ctx) } }, enabled = !Updater.busy.value) { Text(if (Updater.busy.value) "Downloading…" else "Update now") }
                 if (Updater.status.value.isNotEmpty()) Text(Updater.status.value, color = Muted)
@@ -212,7 +243,7 @@ fun HomeScreen(nav: NavController) {
         }
 
         if (!androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled()) {
-            SectionCard("Notifications are off", container = Color(0xFFFFF6EC), accent = Color(0xFFB4530A)) {
+            SectionCard("Notifications are off", container = WarnBg, accent = Warn) {
                 Text("Tasker cannot remind you until notifications are allowed for it.")
                 Button(onClick = { nav.navigate("settings") }) { Text("Fix in Settings") }
             }
@@ -222,35 +253,18 @@ fun HomeScreen(nav: NavController) {
             DaysAgenda({ openT = it }, { openC = it }, { nav.navigate("taskEdit/${it.id}") })
         }
 
-        SectionCard("Next up") {
-            val soon = reminders.filter { it.fireAt < System.currentTimeMillis() + 24 * 60 * 60_000L }.take(5)
-            if (soon.isEmpty()) Text("Nothing due in the next 24 hours.", color = Muted)
-            soon.forEach { r ->
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    // Tapping an item opens the place where it can be edited, noted or deleted.
-                    Column(
-                        Modifier.weight(1f).clickable {
-                            when (r.module) {
-                                "TUITION" -> openT = tSessions.firstOrNull { it.id == r.sourceId }
-                                "CLASS" -> openC = cSessions.firstOrNull { it.id == r.sourceId }
-                                "TASK" -> nav.navigate("taskEdit/${r.sourceId}")
-                                "PRAYER" -> nav.navigate("prayer")
-                                else -> nav.navigate("money")
-                            }
+        if (soon.size > 1) {
+            SectionCard("Later") {
+                soon.drop(1).take(5).forEach { r ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f).clickable { openReminder(r) }) {
+                            Tag(r.module)
+                            Line(r.title, fmtMillis(r.fireAt) + if (r.body.isNotEmpty()) " · " + r.body else "")
                         }
-                    ) {
-                        Tag(r.module)
-                        Line(r.title, fmtMillis(r.fireAt) + if (r.body.isNotEmpty()) " · " + r.body else "")
+                        OutlinedButton(onClick = { finishReminder(r) }) { Text("Done") }
                     }
-                    OutlinedButton(onClick = {
-                        // A to-do asks for an optional note or follow-up; everything else is done at once.
-                        scope.launch {
-                            val task = if (r.module == "TASK") app.dao.getTask(r.sourceId) else null
-                            if (task != null) doneTask = task else app.repo.reminderDone(r)
-                        }
-                    }) { Text("Done") }
+                    RowDivider()
                 }
-                RowDivider()
             }
         }
 
@@ -258,7 +272,7 @@ fun HomeScreen(nav: NavController) {
         val dueTuition = tSessions.filter { it.status == "PLANNED" && (it.date < day || (it.date == day && it.startMin <= nowMin)) }
         val dueClass = cSessions.filter { it.status == "PLANNED" && (it.date < day || (it.date == day && it.startMin <= nowMin)) }
         if (dueTuition.isNotEmpty() || dueClass.isNotEmpty()) {
-            SectionCard("Needs marking", container = Color(0xFFFFF6EC), accent = Color(0xFFB4530A)) {
+            SectionCard("Needs marking", container = WarnBg, accent = Warn) {
                 dueTuition.take(5).forEach { s ->
                     val t = tuitions.firstOrNull { it.id == s.tuitionId }
                     Tag("TUITION")
@@ -301,6 +315,8 @@ fun HomeScreen(nav: NavController) {
             Stat("Spent today", money(spent), Modifier.weight(1f).clickable { nav.navigate("money") })
             Stat("Balance", money(balance), Modifier.weight(1f).clickable { nav.navigate("money") })
         }
+        Text("Design", style = MaterialTheme.typography.labelLarge, color = Muted)
+        Choice(Skins.all.map { it.id to it.label }, Skins.current.id) { app.prefs.setSkin(it) }
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text("Tasker build $build", color = Muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
             androidx.compose.material3.TextButton(onClick = { scope.launch { Updater.check(ctx) } }) { Text("Check for update") }
@@ -316,5 +332,111 @@ fun HomeScreen(nav: NavController) {
     }
     moveC?.let { s ->
         RescheduleDialog("Reschedule class", s.startMin, { moveC = null }) { d, m -> scope.launch { app.repo.moveClassSession(s.id, d, m) } }
+    }
+}
+
+/** A floating rounded bar: three tabs, one round + button that can add anything, three tabs. */
+@Composable
+private fun FloatingBar(tabs: List<Tab>, route: String?, nav: NavController) {
+    val skin = Skins.current
+    var adding by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth().background(skin.bgColor).padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Surface(
+            shape = RoundedCornerShape(32.dp), color = skin.navBg, contentColor = skin.text,
+            border = BorderStroke(1.dp, skin.border), shadowElevation = 10.dp, modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(Modifier.padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                tabs.take(3).forEach { TabIcon(it, route == it.route, nav, Modifier.weight(1f)) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier.size(52.dp).clip(CircleShape).background(skin.hero).clickable { adding = true },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Filled.Add, contentDescription = "Add something", tint = skin.onHero) }
+                    DropdownMenu(expanded = adding, onDismissRequest = { adding = false }) {
+                        listOf(
+                            "Expense" to "expenseAdd", "To-do" to "taskEdit/0", "Note" to "noteEdit/0",
+                            "Tuition" to "tuitionEdit/0", "Class" to "courseEdit/0", "Loan entry" to "loanAdd",
+                        ).forEach { (label, target) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = { adding = false; nav.navigate(target) })
+                        }
+                    }
+                }
+                tabs.drop(3).forEach { TabIcon(it, route == it.route, nav, Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabIcon(t: Tab, selected: Boolean, nav: NavController, modifier: Modifier) {
+    val skin = Skins.current
+    val tint = if (selected) skin.accent else skin.muted
+    Column(
+        modifier.clip(RoundedCornerShape(20.dp)).clickable {
+            nav.navigate(t.route) {
+                popUpTo("home")
+                launchSingleTop = true
+            }
+        }.padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(t.icon, contentDescription = null, tint = tint)
+        Text(t.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, color = tint, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+private fun countdown(at: Long, now: Long): String {
+    val min = ((at - now) / 60_000L).toInt()
+    return when {
+        min <= 0 -> "now"
+        min < 60 -> "in $min min"
+        else -> "in ${min / 60} h ${min % 60} min"
+    }
+}
+
+/** The big card at the top of Home: what is next, how long until it, and today's progress. */
+@Composable
+private fun HeroCard(
+    r: Reminder?, nowMs: Long, doneCount: Int, total: Int,
+    onOpen: (Reminder) -> Unit, onDone: (Reminder) -> Unit, onLater: (Reminder) -> Unit,
+) {
+    val skin = Skins.current
+    Box(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape((skin.radius + 4).dp)).background(skin.hero)
+            .clickable(enabled = r != null) { if (r != null) onOpen(r) }.padding(20.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("NEXT UP", color = skin.onHero, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (r != null) {
+                    Text(
+                        countdown(r.fireAt, nowMs), color = skin.onHero, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.background(skin.onHero.copy(alpha = 0.18f), RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
+            }
+            Text(r?.title ?: "You are all caught up", color = skin.onHero, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            Text(
+                if (r == null) "Nothing is due in the next 24 hours." else fmtMillis(r.fireAt) + if (r.body.isNotEmpty()) " · " + r.body else "",
+                color = skin.onHero, style = MaterialTheme.typography.bodyMedium,
+            )
+            if (total > 0) {
+                LinearProgressIndicator(
+                    progress = { (doneCount.toFloat() / total).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                    color = skin.onHero, trackColor = skin.onHero.copy(alpha = 0.28f),
+                )
+                Text("$doneCount of $total done today", color = skin.onHero, style = MaterialTheme.typography.bodySmall)
+            }
+            if (r != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { onDone(r) }, colors = ButtonDefaults.buttonColors(containerColor = skin.onHero, contentColor = skin.heroInk)) { Text("Done") }
+                    OutlinedButton(
+                        onClick = { onLater(r) }, border = BorderStroke(1.dp, skin.onHero),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = skin.onHero),
+                    ) { Text("Later") }
+                }
+            }
+        }
     }
 }

@@ -36,6 +36,7 @@ class TaskerApp : Application() {
         db = Room.databaseBuilder(this, Db::class.java, "tasker.db").build()
         notesDb = Room.databaseBuilder(this, NotesDb::class.java, "tasker_notes.db").build()
         prefs = Prefs(this)
+        com.nahian.tasker.ui.Skins.current = com.nahian.tasker.ui.Skins.byId(prefs.skinId)
         repo = Repo(this, db.dao(), prefs)
         Notifier.createChannels(this)
         scope.launch {

@@ -28,6 +28,12 @@ class Prefs(ctx: Context) {
     fun setClassRemindMin(v: Int) { classRemindMin.intValue = v; sp.edit().putInt("classRemindMin", v).apply() }
     fun setBubbleOn(v: Boolean) { bubbleOn.value = v; sp.edit().putBoolean("bubbleOn", v).apply() }
 
+    val skinId: String get() = sp.getString("skin", "AURORA") ?: "AURORA"
+    fun setSkin(id: String) {
+        sp.edit().putString("skin", id).apply()
+        com.nahian.tasker.ui.Skins.current = com.nahian.tasker.ui.Skins.byId(id)
+    }
+
     var bubbleX: Int
         get() = sp.getInt("bubbleX", 0)
         set(v) { sp.edit().putInt("bubbleX", v).apply() }
@@ -405,6 +411,14 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
     }
 
     // ---------------- Reminders ----------------
+
+    /** "Later": ask again in 10 minutes. */
+    suspend fun snooze(r: Reminder) {
+        val next = System.currentTimeMillis() + 10 * 60_000L
+        dao.updateReminder(r.copy(fireAt = next, state = "SNOOZED"))
+        ReminderScheduler.set(ctx, r.id, next)
+        com.nahian.tasker.core.Notifier.cancel(ctx, r.id)
+    }
 
     /** "Done" pressed on a notification, in the bubble panel, or on the home screen. */
     suspend fun reminderDone(r: Reminder) {

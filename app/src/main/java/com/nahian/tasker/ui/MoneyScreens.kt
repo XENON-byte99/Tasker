@@ -207,7 +207,7 @@ private fun LoansTab(nav: NavController) {
     if (pool > 0 && target != null) {
         val person = persons.firstOrNull { it.id == target.personId }
         val pay = minOf(pool, outstanding(target.id, target.principal))
-        SectionCard("Repayment suggestion", container = Color(0xFFEAF4F2)) {
+        SectionCard("Repayment suggestion", container = AccentBg) {
             Text("$share% of your recent income is set aside for loans: ${money(pool)}.")
             Line("Pay ${person?.name ?: "lender"}", if (target.dueDate != null) "Due ${fmtDate(target.dueDate)}" else "No due date", money(pay))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

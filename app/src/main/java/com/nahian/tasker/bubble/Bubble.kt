@@ -82,6 +82,7 @@ import com.nahian.tasker.ui.Tag
 import com.nahian.tasker.ui.moduleColor
 import com.nahian.tasker.ui.moduleLabel
 import com.nahian.tasker.ui.MainActivity
+import com.nahian.tasker.ui.Skins
 import com.nahian.tasker.ui.TaskerTheme
 import com.nahian.tasker.ui.rememberFlow
 import com.nahian.tasker.ui.taskerApp
@@ -261,7 +262,7 @@ class QuickActivity : ComponentActivity() {
                     contentAlignment = Alignment.Center,
                 ) {
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = Skins.current.card, contentColor = Skins.current.text),
                         modifier = Modifier.fillMaxWidth().clickable { },
                     ) {
                         val module = intent.getStringExtra("module")
