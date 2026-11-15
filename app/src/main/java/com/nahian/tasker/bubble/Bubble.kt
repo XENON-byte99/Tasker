@@ -66,6 +66,7 @@ import com.nahian.tasker.core.PendingItem
 import com.nahian.tasker.core.fmtMillis
 import com.nahian.tasker.core.parseMoney
 import com.nahian.tasker.core.today
+import com.nahian.tasker.data.Note
 import com.nahian.tasker.data.Task
 import com.nahian.tasker.data.ClassSession
 import com.nahian.tasker.data.TuitionSession
@@ -288,6 +289,7 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
     var note by remember { mutableStateOf("") }
     var catId by remember { mutableStateOf<Long?>(null) }
     var todo by remember { mutableStateOf("") }
+    var quickNote by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var openT by remember { mutableStateOf<TuitionSession?>(null) }
     var openC by remember { mutableStateOf<ClassSession?>(null) }
@@ -344,6 +346,18 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Add to-do") }
+
+        Text("QUICK NOTE", style = MaterialTheme.typography.labelMedium)
+        Field("Write a note", quickNote, { quickNote = it })
+        Button(
+            onClick = {
+                if (quickNote.isBlank()) message = "Type the note first." else scope.launch {
+                    app.notes.insert(Note(title = quickNote.trim().take(40), body = quickNote.trim(), updatedAt = System.currentTimeMillis()))
+                    quickNote = ""; message = "Note saved."
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Add note") }
 
         if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.primary)
     }

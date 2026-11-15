@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
@@ -92,6 +93,7 @@ fun AppRoot() {
         Tab("money", "Money", Icons.Filled.ShoppingCart),
         Tab("prayer", "Prayer", Icons.Filled.Star),
         Tab("todo", "To-do", Icons.Filled.CheckCircle),
+        Tab("notes", "Notes", Icons.Filled.Edit),
     )
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
@@ -110,7 +112,7 @@ fun AppRoot() {
                                 }
                             },
                             icon = { Icon(t.icon, contentDescription = null) },
-                            label = { Text(t.label) },
+                            label = { Text(t.label, maxLines = 1, softWrap = false, style = androidx.compose.material3.MaterialTheme.typography.labelSmall) },
                         )
                     }
                 }
@@ -123,6 +125,8 @@ fun AppRoot() {
             composable("money") { MoneyScreen(nav) }
             composable("prayer") { PrayerScreen() }
             composable("todo") { TodoScreen(nav) }
+            composable("notes") { NotesScreen(nav) }
+            composable("noteEdit/{id}") { NoteEditScreen(nav, it.longArg("id")) }
             composable("analytics") { AnalyticsScreen(nav) }
             composable("settings") { SettingsScreen(nav) }
             composable("calendar/{kind}") { CalendarScreen(nav, it.arguments?.getString("kind") ?: "TUITION") }
@@ -257,6 +261,7 @@ fun HomeScreen(nav: NavController) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { nav.navigate("expenseAdd") }) { Text("Add expense") }
             OutlinedButton(onClick = { nav.navigate("taskEdit/0") }) { Text("Add to-do") }
+            OutlinedButton(onClick = { nav.navigate("noteEdit/0") }) { Text("Add note") }
         }
     }
 
