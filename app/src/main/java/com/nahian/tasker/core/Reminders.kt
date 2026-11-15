@@ -33,6 +33,7 @@ const val ACTION_FIRE = "com.nahian.tasker.FIRE"
 const val ACTION_DONE = "com.nahian.tasker.DONE"
 const val ACTION_SNOOZE = "com.nahian.tasker.SNOOZE"
 const val ACTION_SYNC = "com.nahian.tasker.SYNC"
+const val ACTION_MISSED = "com.nahian.tasker.MISSED"
 
 private const val REPEAT_EVERY_MS = 5 * 60_000L
 private const val SNOOZE_MS = 10 * 60_000L
@@ -70,6 +71,21 @@ object Planner {
             }
         }
 
+        // When a tuition ends and is still unmarked, ask "did you teach?" with Done / Missed buttons.
+        for (s in dao.listPlannedTuitionSessions(start.toString())) {
+            val t = dao.getTuition(s.tuitionId) ?: continue
+            if (!t.active) continue
+            val end = millisOf(s.date, s.startMin) + t.durationMin * 60_000L
+            if (end > now) {
+                dao.insertReminder(
+                    Reminder(
+                        rkey = "TUIM:${s.id}", module = "TUITION", sourceId = s.id, title = "Did you teach ${t.name}?",
+                        body = "Mark this tuition day as Done or Missed", fireAt = end,
+                    )
+                )
+            }
+        }
+
         val lead = app.prefs.classRemindMin.intValue
         for (slot in dao.listSlots()) {
             val course = dao.getCourse(slot.courseId) ?: continue
@@ -89,6 +105,21 @@ object Planner {
                         )
                     )
                 }
+            }
+        }
+
+        val slotsById = dao.listSlots().associateBy { it.id }
+        for (s in dao.listPlannedClassSessions(start.toString())) {
+            val c = dao.getCourse(s.courseId) ?: continue
+            val endMin = minOf(slotsById[s.slotId]?.endMin ?: (s.startMin + 60), 23 * 60 + 59)
+            val end = millisOf(s.date, endMin)
+            if (end > now) {
+                dao.insertReminder(
+                    Reminder(
+                        rkey = "CLSM:${s.id}", module = "CLASS", sourceId = s.id, title = "Did you attend ${c.code}?",
+                        body = "Mark this class as Attended or Missed", fireAt = end,
+                    )
+                )
             }
         }
 
@@ -175,7 +206,7 @@ object Notifier {
         ) return
         val open = PendingIntent.getActivity(ctx, 0, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val doneLabel = if (r.module == "TUITION" || r.module == "CLASS") "OK" else "Done"
-        val n = NotificationCompat.Builder(ctx, if (channels.any { it.first == r.module }) r.module else "TASK")
+        val builder = NotificationCompat.Builder(ctx, if (channels.any { it.first == r.module }) r.module else "TASK")
             .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle(r.title)
             .setContentText(r.body)
@@ -183,10 +214,35 @@ object Notifier {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
             .setContentIntent(open)
-            .addAction(0, doneLabel, ReminderScheduler.actionIntent(ctx, ACTION_DONE, r.id))
-            .addAction(0, "Snooze 10 min", ReminderScheduler.actionIntent(ctx, ACTION_SNOOZE, r.id))
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        if (r.rkey.startsWith("TUIM:") || r.rkey.startsWith("CLSM:")) {
+            builder.addAction(0, if (r.rkey.startsWith("TUIM:")) "Done" else "Attended", ReminderScheduler.actionIntent(ctx, ACTION_DONE, r.id))
+            builder.addAction(0, "Missed", ReminderScheduler.actionIntent(ctx, ACTION_MISSED, r.id))
+        } else {
+            builder.addAction(0, doneLabel, ReminderScheduler.actionIntent(ctx, ACTION_DONE, r.id))
+            builder.addAction(0, "Snooze 10 min", ReminderScheduler.actionIntent(ctx, ACTION_SNOOZE, r.id))
+        }
+        NotificationManagerCompat.from(ctx).notify(r.id.toInt(), builder.build())
+    }
+
+    /** Lets the user check from Settings that notifications really pop up on this phone. */
+    @SuppressLint("MissingPermission")
+    fun test(ctx: Context): Boolean {
+        if (!NotificationManagerCompat.from(ctx).areNotificationsEnabled()) return false
+        val n = NotificationCompat.Builder(ctx, "TASK")
+            .setSmallIcon(R.drawable.ic_notif)
+            .setContentTitle("Tasker test notification")
+            .setContentText("If this popped up on top, your reminders will too.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(ctx).notify(r.id.toInt(), n)
+        return try { NotificationManagerCompat.from(ctx).notify(999_999, n); true } catch (e: SecurityException) { false }
+    }
+
+    suspend fun cancelByKey(ctx: Context, dao: com.nahian.tasker.data.AppDao, key: String) {
+        dao.reminderIdByKey(key)?.let { cancel(ctx, it) }
     }
 
     fun cancel(ctx: Context, id: Long) {
@@ -213,6 +269,10 @@ class AlarmReceiver : BroadcastReceiver() {
             ACTION_FIRE -> {
                 val r = dao.getReminder(id) ?: return
                 if (r.state != "SCHEDULED" && r.state != "SNOOZED") return
+                // A "did you teach / attend?" question is pointless once the session is already marked.
+                val answered = (r.rkey.startsWith("TUIM:") && dao.getTuitionSession(r.sourceId)?.status != "PLANNED") ||
+                    (r.rkey.startsWith("CLSM:") && dao.getClassSession(r.sourceId)?.status != "PLANNED")
+                if (answered) { dao.updateReminder(r.copy(state = "DONE")); return }
                 Notifier.show(ctx, r)
                 if (r.persistent && r.repeatsLeft > 0) {
                     // Keep popping up until the user answers.
@@ -226,6 +286,13 @@ class AlarmReceiver : BroadcastReceiver() {
             ACTION_DONE -> {
                 val r = dao.getReminder(id) ?: return
                 app.repo.reminderDone(r)
+            }
+            ACTION_MISSED -> {
+                val r = dao.getReminder(id) ?: return
+                dao.updateReminder(r.copy(state = "DONE"))
+                if (r.rkey.startsWith("TUIM:")) dao.getTuitionSession(r.sourceId)?.let { app.repo.markTuitionSession(it.id, "MISSED", it.note) }
+                if (r.rkey.startsWith("CLSM:")) dao.getClassSession(r.sourceId)?.let { app.repo.markClassSession(it.id, "MISSED", it.note) }
+                Notifier.cancel(ctx, r.id)
             }
             ACTION_SNOOZE -> {
                 val r = dao.getReminder(id) ?: return

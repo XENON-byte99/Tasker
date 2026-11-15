@@ -176,6 +176,13 @@ fun HomeScreen(nav: NavController) {
             }
         }
 
+        if (!androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled()) {
+            SectionCard("Notifications are off", container = Color(0xFFFFF6EC), accent = Color(0xFFB4530A)) {
+                Text("Tasker cannot remind you until notifications are allowed for it.")
+                Button(onClick = { nav.navigate("settings") }) { Text("Fix in Settings") }
+            }
+        }
+
         SectionCard("Today and the next 6 days") {
             DaysAgenda({ openT = it }, { openC = it }, { nav.navigate("taskEdit/${it.id}") })
         }

@@ -48,6 +48,7 @@ interface AppDao {
     @Query("SELECT * FROM tuition_session ORDER BY date DESC, startMin DESC") fun flowTuitionSessions(): Flow<List<TuitionSession>>
     @Query("SELECT COUNT(*) FROM tuition_session WHERE tuitionId = :tid AND date = :date")
     suspend fun countTuitionSessions(tid: Long, date: String): Int
+    @Query("SELECT * FROM tuition_session WHERE status = 'PLANNED' AND date >= :from") suspend fun listPlannedTuitionSessions(from: String): List<TuitionSession>
     @Query("SELECT COUNT(*) FROM tuition_session WHERE setId = :setId AND status = 'DONE'")
     suspend fun countDone(setId: Long): Int
     @Query("DELETE FROM reminder WHERE module = 'TUITION' AND sourceId IN (SELECT id FROM tuition_session WHERE tuitionId = :tid AND status = 'PLANNED' AND date >= :from)")
@@ -72,6 +73,7 @@ interface AppDao {
     @Update suspend fun updateClassSession(s: ClassSession)
     @Query("SELECT * FROM class_session WHERE id = :id") suspend fun getClassSession(id: Long): ClassSession?
     @Query("SELECT * FROM class_session ORDER BY date DESC, startMin") fun flowClassSessions(): Flow<List<ClassSession>>
+    @Query("SELECT * FROM class_session WHERE status = 'PLANNED' AND date >= :from") suspend fun listPlannedClassSessions(from: String): List<ClassSession>
     @Query("SELECT COUNT(*) FROM class_session WHERE slotId = :slotId AND date = :date")
     suspend fun countClassSessions(slotId: Long, date: String): Int
     @Query("DELETE FROM reminder WHERE module = 'CLASS' AND sourceId IN (SELECT id FROM class_session WHERE courseId = :cid AND status = 'PLANNED' AND date >= :from)")
@@ -139,5 +141,6 @@ interface AppDao {
     @Query("SELECT * FROM reminder WHERE state IN ('SCHEDULED', 'SNOOZED') ORDER BY fireAt") suspend fun pendingReminders(): List<Reminder>
     @Query("SELECT * FROM reminder WHERE state IN ('SCHEDULED', 'SNOOZED') ORDER BY fireAt") fun flowPendingReminders(): Flow<List<Reminder>>
     @Query("DELETE FROM reminder WHERE rkey = :key") suspend fun deleteReminderByKey(key: String)
+    @Query("SELECT id FROM reminder WHERE rkey = :key") suspend fun reminderIdByKey(key: String): Long?
     @Query("UPDATE reminder SET state = 'DONE' WHERE rkey = :key") suspend fun completeReminderByKey(key: String)
 }

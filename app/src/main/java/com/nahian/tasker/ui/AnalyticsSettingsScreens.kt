@@ -29,7 +29,11 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.nahian.tasker.bubble.BubbleService
+import com.nahian.tasker.core.Notifier
 import com.nahian.tasker.core.ReminderScheduler
+import android.content.Context
+import android.os.PowerManager
+import androidx.core.app.NotificationManagerCompat
 import com.nahian.tasker.core.Updater
 import androidx.compose.material3.Button
 import kotlinx.coroutines.launch
@@ -151,6 +155,23 @@ fun SettingsScreen(nav: NavController) {
     var hint by remember { mutableStateOf("") }
 
     Screen("Settings", onBack = { nav.popBackStack() }) {
+        SectionCard("Notifications") {
+            val notifOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+            val exact = ReminderScheduler.canExact(ctx)
+            val batteryOk = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
+            Text(if (notifOn) "✓ Notifications are allowed" else "✗ Notifications are blocked for Tasker", color = if (notifOn) Teal else Warn, fontWeight = FontWeight.SemiBold)
+            Text(if (exact) "✓ Exact timing is allowed" else "✗ Exact timing is off, so reminders can be late", color = if (exact) Teal else Warn, fontWeight = FontWeight.SemiBold)
+            Text(if (batteryOk) "✓ Battery saving will not stop reminders" else "✗ Battery saving can stop reminders while the app is closed", color = if (batteryOk) Teal else Warn, fontWeight = FontWeight.SemiBold)
+            var testMsg by remember { mutableStateOf("") }
+            Button(onClick = { testMsg = if (Notifier.test(ctx)) "Sent. It should pop up at the top now." else "Blocked. Allow notifications for Tasker first." }) { Text("Send a test notification") }
+            if (testMsg.isNotEmpty()) Text(testMsg, color = Muted)
+            OutlinedButton(onClick = {
+                ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
+            }) { Text("Open Tasker notification settings") }
+            Text("If the test only appears in the notification list and does not pop up on top, turn on \"Pop on screen\" (also called floating or banner notifications) for Tasker on that settings page.", style = MaterialTheme.typography.bodySmall, color = Muted)
+            Text("These reminders work whether the bubble is on or off.", style = MaterialTheme.typography.bodySmall, color = Muted)
+        }
+
         SectionCard("Floating bubble") {
             SwitchRow("Show bubble over other apps", prefs.bubbleOn.value, "Tap it anywhere for quick expense and to-do entry") { on ->
                 if (on) {

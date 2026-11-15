@@ -102,7 +102,11 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         dao.updateTuitionSession(s.copy(status = status, note = note, setId = setId))
         if (setId != 0L) recomputeSet(setId)
         if (s.setId != 0L && s.setId != setId) recomputeSet(s.setId)
-        if (status != "PLANNED") dao.completeReminderByKey("TUI:$sessionId")
+        if (status != "PLANNED") {
+            dao.completeReminderByKey("TUI:$sessionId")
+            dao.completeReminderByKey("TUIM:$sessionId")
+            com.nahian.tasker.core.Notifier.cancelByKey(ctx, dao, "TUIM:$sessionId")
+        }
     }
 
     /** Moves one day to another date or time without touching the weekly schedule. */
@@ -111,6 +115,7 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         val t = dao.getTuition(s.tuitionId) ?: return
         dao.updateTuitionSession(s.copy(status = "MOVED"))
         dao.deleteReminderByKey("TUI:$sessionId")
+        dao.deleteReminderByKey("TUIM:$sessionId")
         val moved = if (note.isBlank()) "Rescheduled from ${fmtDate(s.date)}" else note
         val nid = dao.insertTuitionSession(TuitionSession(tuitionId = s.tuitionId, date = newDate, startMin = newMin, note = moved))
         val at = millisOf(newDate, newMin) - t.remindBeforeMin * 60_000L
@@ -165,7 +170,11 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
     suspend fun markClassSession(sessionId: Long, status: String, note: String) {
         val s = dao.getClassSession(sessionId) ?: return
         dao.updateClassSession(s.copy(status = status, note = note))
-        if (status != "PLANNED") dao.completeReminderByKey("CLS:$sessionId")
+        if (status != "PLANNED") {
+            dao.completeReminderByKey("CLS:$sessionId")
+            dao.completeReminderByKey("CLSM:$sessionId")
+            com.nahian.tasker.core.Notifier.cancelByKey(ctx, dao, "CLSM:$sessionId")
+        }
     }
 
     /** Moves one class to another day or time (a make-up class). The original is not counted. */
@@ -174,6 +183,7 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         val c = dao.getCourse(s.courseId) ?: return
         dao.updateClassSession(s.copy(status = "MOVED"))
         dao.deleteReminderByKey("CLS:$sessionId")
+        dao.deleteReminderByKey("CLSM:$sessionId")
         val nid = dao.insertClassSession(
             ClassSession(courseId = s.courseId, slotId = 0, date = newDate, startMin = newMin, note = "Rescheduled from ${fmtDate(s.date)}")
         )
@@ -354,6 +364,9 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
     /** "Done" pressed on a notification, in the bubble panel, or on the home screen. */
     suspend fun reminderDone(r: Reminder) {
         dao.updateReminder(r.copy(state = "DONE"))
+        // "Did you teach / attend?" reminders: Done marks the session itself.
+        if (r.rkey.startsWith("TUIM:")) dao.getTuitionSession(r.sourceId)?.let { if (it.status == "PLANNED") markTuitionSession(it.id, "DONE", it.note) }
+        if (r.rkey.startsWith("CLSM:")) dao.getClassSession(r.sourceId)?.let { if (it.status == "PLANNED") markClassSession(it.id, "ATTENDED", it.note) }
         when (r.module) {
             "TASK" -> dao.getTask(r.sourceId)?.let { completeTask(it) }
             "PRAYER" -> {
