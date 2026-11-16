@@ -163,6 +163,8 @@ fun SettingsScreen(nav: NavController) {
             Choice(Skins.all.map { it.id to it.label }, Skins.current.id) { prefs.setSkin(it) }
         }
 
+        ProtectionSettings(nav)
+
         SectionCard("Notifications") {
             val notifOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
             val exact = ReminderScheduler.canExact(ctx)

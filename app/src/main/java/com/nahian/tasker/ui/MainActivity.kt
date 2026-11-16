@@ -87,6 +87,8 @@ import androidx.navigation.compose.rememberNavController
 import com.nahian.tasker.core.PRAYERS
 import com.nahian.tasker.core.Planner
 import com.nahian.tasker.core.Updater
+import com.nahian.tasker.core.Vault
+import androidx.compose.material.icons.filled.Lock
 import com.nahian.tasker.core.fmtMillis
 import com.nahian.tasker.core.fmtTime
 import com.nahian.tasker.core.money
@@ -108,8 +110,24 @@ class MainActivity : ComponentActivity() {
                 bars.isAppearanceLightStatusBars = !skin.dark
                 bars.isAppearanceLightNavigationBars = !skin.dark
             }
-            TaskerTheme { AppRoot() }
+            TaskerTheme {
+                // With protection on, nothing of the app is drawn until the password is entered.
+                if (Vault.configured.value && Vault.lockOnStart.value && !Vault.unlocked.value) LockScreen() else AppRoot()
+            }
         }
+    }
+
+    private var stoppedAt = 0L
+
+    override fun onStop() {
+        super.onStop()
+        stoppedAt = android.os.SystemClock.elapsedRealtime()
+    }
+
+    /** Lock again after a minute in the background. */
+    override fun onStart() {
+        super.onStart()
+        if (stoppedAt != 0L && android.os.SystemClock.elapsedRealtime() - stoppedAt > 60_000L) Vault.lock(applicationContext)
     }
 
     /** Look for a newer build every time the app comes to the front, not only on a cold start. */
@@ -162,6 +180,8 @@ fun AppRoot() {
             composable("prayer") { PrayerScreen() }
             composable("todo") { TodoScreen(nav) }
             composable("notes") { NotesScreen(nav) }
+            composable("vault") { VaultScreen(nav) }
+            composable("secretEdit/{id}") { SecretEditScreen(nav, it.longArg("id")) }
             composable("noteEdit/{id}") { NoteEditScreen(nav, it.longArg("id")) }
             composable("analytics") { AnalyticsScreen(nav) }
             composable("settings") { SettingsScreen(nav) }
@@ -202,6 +222,7 @@ fun HomeScreen(nav: NavController) {
         accent = Teal,
         icon = Icons.Filled.Home,
         actions = {
+            IconButton(onClick = { nav.navigate("vault") }) { Icon(Icons.Filled.Lock, contentDescription = "Vault: passwords and files") }
             IconButton(onClick = { nav.navigate("analytics") }) { Icon(Icons.Filled.Info, contentDescription = "Analytics") }
             IconButton(onClick = { nav.navigate("settings") }) { Icon(Icons.Filled.Settings, contentDescription = "Settings") }
         },
@@ -356,6 +377,7 @@ private fun FloatingBar(tabs: List<Tab>, route: String?, nav: NavController) {
                         listOf(
                             "Expense" to "expenseAdd", "To-do" to "taskEdit/0", "Note" to "noteEdit/0",
                             "Tuition" to "tuitionEdit/0", "Class" to "courseEdit/0", "Loan entry" to "loanAdd",
+                            "Password" to "secretEdit/0", "Secure file" to "vault",
                         ).forEach { (label, target) ->
                             DropdownMenuItem(text = { Text(label) }, onClick = { adding = false; nav.navigate(target) })
                         }

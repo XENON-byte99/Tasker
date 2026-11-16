@@ -8,6 +8,9 @@ import com.nahian.tasker.data.AppDao
 import com.nahian.tasker.data.Db
 import com.nahian.tasker.data.NoteDao
 import com.nahian.tasker.data.NotesDb
+import com.nahian.tasker.data.VaultDao
+import com.nahian.tasker.data.VaultDb
+import com.nahian.tasker.core.Vault
 import com.nahian.tasker.data.Prefs
 import com.nahian.tasker.data.Repo
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +29,9 @@ class TaskerApp : Application() {
     lateinit var notesDb: NotesDb
         private set
     val notes: NoteDao get() = notesDb.noteDao()
+    lateinit var vaultDb: VaultDb
+        private set
+    val vault: VaultDao get() = vaultDb.vaultDao()
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** For saves started from screens and dialogs: keeps running after the dialog or screen closes. */
@@ -35,6 +41,8 @@ class TaskerApp : Application() {
         super.onCreate()
         db = Room.databaseBuilder(this, Db::class.java, "tasker.db").build()
         notesDb = Room.databaseBuilder(this, NotesDb::class.java, "tasker_notes.db").build()
+        vaultDb = Room.databaseBuilder(this, VaultDb::class.java, "tasker_vault.db").build()
+        Vault.init(this)
         prefs = Prefs(this)
         com.nahian.tasker.ui.Skins.current = com.nahian.tasker.ui.Skins.byId(prefs.skinId)
         repo = Repo(this, db.dao(), prefs)
