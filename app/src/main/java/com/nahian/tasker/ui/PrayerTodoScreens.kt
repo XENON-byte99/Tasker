@@ -72,8 +72,7 @@ fun PrayerScreen() {
     var picking by remember { mutableStateOf<String?>(null) }
     var editTimes by remember { mutableStateOf(false) }
 
-    Screen("Prayer", accent = moduleColor("PRAYER"), icon = Icons.Filled.Star, actions = { TextButton(onClick = { editTimes = !editTimes }) { Text(if (editTimes) "Close" else "Times and alerts") } }) {
-        Text(fmtDate(day), color = Muted)
+    Screen("Prayer", sub = fmtDate(today()), actions = { TextButton(onClick = { editTimes = !editTimes }) { Text(if (editTimes) "Close" else "Times and alerts") } }) {
 
         // Next prayer, as the big card in the design.
         val nowMin = com.nahian.tasker.core.nowMinutes()
@@ -258,7 +257,7 @@ fun TodoScreen(nav: NavController) {
     val open = tasks.filter { it.completedAt == null }
     fun label(t: Task) = cats.firstOrNull { it.id == t.categoryId }?.let { categoryLabel(it, cats) } ?: ""
 
-    Screen("To-do", accent = moduleColor("TASK"), icon = Icons.Filled.CheckCircle) {
+    Screen("To-do", onAdd = { nav.navigate("taskEdit/0") }) {
         Choice(
             listOf(
                 "TODAY" to "Today ${open.count { it.dueDate == day }}",
@@ -270,7 +269,6 @@ fun TodoScreen(nav: NavController) {
             filter,
         ) { filter = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { nav.navigate("taskEdit/0") }) { Text("Add task") }
             OutlinedButton(onClick = { addingCat = true }) { Text("Add category") }
         }
 
@@ -364,7 +362,8 @@ fun TaskEditScreen(nav: NavController, id: Long) {
         }
     }
 
-    Screen(if (id == 0L) "New task" else "Edit task", onBack = { nav.popBackStack() }) {
+    val saveAction = remember { Ref<() -> Unit>({}) }
+    FormScreen(if (id == 0L) "New task" else "Edit task", onCancel = { nav.popBackStack() }, save = saveAction) {
         Field("What to do", title, { title = it })
         Dropdown(
             "Category",
@@ -381,8 +380,7 @@ fun TaskEditScreen(nav: NavController, id: Long) {
         Field("Notes (optional)", notes, { notes = it })
         if (error.isNotEmpty()) Text(error, color = Warn)
 
-        Button(
-            onClick = {
+        saveAction.value = {
                 val d = if (dueDate.isBlank()) null else parseDateOrNull(dueDate)
                 val m = if (dueTime.isBlank()) null else parseTimeOrNull(dueTime)
                 error = when {
@@ -400,9 +398,7 @@ fun TaskEditScreen(nav: NavController, id: Long) {
                     )
                     nav.popBackStack()
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save") }
+        }
 
         existing?.let { t ->
             ConfirmButton("Delete task", "Delete \"${t.title}\"? This cannot be undone.", Modifier.fillMaxWidth(), outlined = true) {

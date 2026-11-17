@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
@@ -75,18 +76,11 @@ fun AnalyticsScreen(nav: NavController) {
     val logs by rememberFlow(from) { app.dao.flowPrayerLogs(from) }
     val days = (date(today()).toEpochDay() - date(from).toEpochDay() + 1).toInt()
 
-    Screen("Analytics", onBack = { nav.popBackStack() }, accent = moduleColor("PRAYER"), icon = Icons.Filled.Info) {
+    Screen("Analytics", onBack = { nav.popBackStack() }, backLabel = "Home") {
         Segmented(listOf("WEEK" to "Last 7 days", "MONTH" to "This month", "YEAR" to "This year"), period) { period = it }
 
-        val income = txns.filter { it.type == "INCOME" && it.date >= from }.sumOf { it.amount }
-        val expense = txns.filter { it.type == "EXPENSE" && it.date >= from }.sumOf { it.amount }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            Stat("Income", money(income), Modifier.weight(1f), Teal)
-            Stat("Expenses", money(expense), Modifier.weight(1f))
-        }
-        Stat("Saved in this period", money(income - expense), Modifier.fillMaxWidth(), if (income >= expense) Teal else Warn)
-
-        SectionCard("Income and expenses · last 6 months", accent = moduleColor("MONEY")) {
+        SectionCard {
+            Eyebrow("Income and expenses")
             val months = (5 downTo 0).map { now.minusMonths(it.toLong()).toString().take(7) }
             val rows = months.map { m ->
                 Triple(
@@ -124,55 +118,57 @@ fun AnalyticsScreen(nav: NavController) {
             Line("This month: in ${money(last.second)}, out ${money(last.third)}", trailing = money(last.second - last.third), trailingColor = if (last.second >= last.third) Teal else Warn)
         }
 
-        SectionCard("Spending by category", accent = moduleColor("MONEY")) {
+        // Two tiles, the attendance card, then two more tiles, as in the Analytics design.
+        val doneT = tSessions.count { it.status == "DONE" && it.date >= from }
+        val missedT = tSessions.count { it.status == "MISSED" && it.date >= from }
+        val due = sets.filter { it.status == "COMPLETE" }.sumOf { maxOf(0L, it.fee - it.paidAmount) }
+        val owe = loans.filter { it.direction == "TAKEN" }.sumOf { l -> maxOf(0L, l.principal - reps.filter { it.loanId == l.id }.sumOf { it.amount }) }
+        val owed = loans.filter { it.direction == "GIVEN" }.sumOf { l -> maxOf(0L, l.principal - reps.filter { it.loanId == l.id }.sumOf { it.amount }) }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            Stat("Tuition days", "$doneT taught", Modifier.weight(1f), sub = "$missedT missed · ${money(due)} due", subColor = if (missedT > 0 || due > 0) Warn else Muted)
+            Stat("Loans you owe", money(owe), Modifier.weight(1f), sub = "Owed to you ${money(owed)}", subColor = Teal)
+        }
+
+        SectionCard {
+            Eyebrow("Class attendance")
+            if (courses.isEmpty()) Text("No courses yet.", color = Muted)
+            courses.forEach { c ->
+                val a = cSessions.count { it.courseId == c.id && it.status == "ATTENDED" && it.date >= from }
+                val m = cSessions.count { it.courseId == c.id && it.status == "MISSED" && it.date >= from }
+                val pct = if (a + m == 0) null else a * 100 / (a + m)
+                val low = pct != null && pct < c.minAttendance
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(c.code, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, maxLines = 1, modifier = Modifier.width(84.dp))
+                    LinearProgressIndicator(
+                        progress = { (pct ?: 0) / 100f }, modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp)),
+                        color = if (low) Warn else moduleColor("TUITION"),
+                    )
+                    Text(if (pct == null) "–" else "$pct%", fontWeight = FontWeight.Bold, color = if (low) Warn else Skins.current.text, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(48.dp))
+                }
+            }
+        }
+
+        val prayed = logs.count { it.status != "MISSED" }
+        val prayerPct = if (days <= 0) 0 else (prayed * 100 / (days * 5)).coerceAtMost(100)
+        val fromMs = date(from).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val tasksDone = tasks.count { (it.completedAt ?: 0L) >= fromMs }
+        val tasksOpen = tasks.count { it.completedAt == null }
+        val overdue = tasks.count { it.completedAt == null && it.dueDate != null && it.dueDate < today() }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            Stat("Prayers marked", "$prayerPct%", Modifier.weight(1f), sub = "${logs.count { it.status == "MISSED" }} missed · ${logs.count { it.status == "JAMAAT" }} with jamaat")
+            Stat("Tasks done", "$tasksDone of ${tasksDone + tasksOpen}", Modifier.weight(1f), sub = if (overdue > 0) "$overdue overdue" else "none overdue", subColor = if (overdue > 0) Warn else Muted)
+        }
+
+        SectionCard {
+            Eyebrow("Spending by category")
             val byCat = txns.filter { it.type == "EXPENSE" && it.date >= from }.groupBy { it.categoryId }
                 .mapValues { e -> e.value.sumOf { it.amount } }.toList().sortedByDescending { it.second }
             val top = byCat.firstOrNull()?.second ?: 0L
             if (byCat.isEmpty()) Text("No expenses in this period.", color = Muted)
             byCat.forEach { (catId, sum) ->
                 Line(categories.firstOrNull { it.id == catId }?.name ?: "Uncategorised", trailing = money(sum))
-                LinearProgressIndicator(progress = { if (top == 0L) 0f else sum.toFloat() / top }, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(progress = { if (top == 0L) 0f else sum.toFloat() / top }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)), color = moduleColor("MONEY"))
             }
-        }
-
-        SectionCard("Tuition", accent = moduleColor("TUITION")) {
-            val done = tSessions.count { it.status == "DONE" && it.date >= from }
-            val missed = tSessions.count { it.status == "MISSED" && it.date >= from }
-            val due = sets.filter { it.status == "COMPLETE" }.sumOf { maxOf(0L, it.fee - it.paidAmount) }
-            Line("Days taught", trailing = "$done")
-            Line("Days missed", trailing = "$missed", trailingColor = if (missed > 0) Warn else Color.Unspecified)
-            Line("Fees still to collect", trailing = money(due), trailingColor = if (due > 0) Warn else Color.Unspecified)
-        }
-
-        SectionCard("Class attendance", accent = moduleColor("CLASS")) {
-            if (courses.isEmpty()) Text("No courses yet.", color = Muted)
-            courses.forEach { c ->
-                val a = cSessions.count { it.courseId == c.id && it.status == "ATTENDED" && it.date >= from }
-                val m = cSessions.count { it.courseId == c.id && it.status == "MISSED" && it.date >= from }
-                val pct = if (a + m == 0) null else a * 100 / (a + m)
-                Line(c.code, "$a attended · $m missed", if (pct == null) "No data" else "$pct%", if (pct != null && pct < c.minAttendance) Warn else Teal)
-                if (pct != null) LinearProgressIndicator(progress = { pct / 100f }, modifier = Modifier.fillMaxWidth(), color = if (pct < c.minAttendance) Warn else Teal)
-            }
-        }
-
-        SectionCard("Prayer", accent = moduleColor("PRAYER")) {
-            val prayed = logs.count { it.status != "MISSED" }
-            val total = days * 5
-            Line("Prayers marked", "Out of $total in this period", "$prayed", Teal)
-            Line("With jamaat", trailing = "${logs.count { it.status == "JAMAAT" }}")
-            Line("Late", trailing = "${logs.count { it.status == "LATE" }}")
-            Line("Missed", trailing = "${logs.count { it.status == "MISSED" }}", trailingColor = Warn)
-        }
-
-        SectionCard("To-do and loans", accent = moduleColor("TASK")) {
-            val fromMs = date(from).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-            Line("Tasks completed", trailing = "${tasks.count { (it.completedAt ?: 0L) >= fromMs }}")
-            Line("Tasks open", trailing = "${tasks.count { it.completedAt == null }}")
-            Line("Tasks overdue", trailing = "${tasks.count { it.completedAt == null && it.dueDate != null && it.dueDate < today() }}", trailingColor = Warn)
-            val owe = loans.filter { it.direction == "TAKEN" }.sumOf { l -> maxOf(0L, l.principal - reps.filter { it.loanId == l.id }.sumOf { it.amount }) }
-            val owed = loans.filter { it.direction == "GIVEN" }.sumOf { l -> maxOf(0L, l.principal - reps.filter { it.loanId == l.id }.sumOf { it.amount }) }
-            Line("You owe", trailing = money(owe), trailingColor = if (owe > 0) Warn else Color.Unspecified)
-            Line("Owed to you", trailing = money(owed), trailingColor = Teal)
         }
     }
 }
@@ -186,7 +182,7 @@ fun SettingsScreen(nav: NavController) {
     var classLead by remember { mutableStateOf(prefs.classRemindMin.intValue.toString()) }
     var hint by remember { mutableStateOf("") }
 
-    Screen("Settings", onBack = { nav.popBackStack() }, accent = NoteColor, icon = Icons.Filled.SettingsIcon) {
+    Screen("Settings", onBack = { nav.popBackStack() }, backLabel = "Home") {
         // Profile card, as at the top of the Settings design.
         SectionCard {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

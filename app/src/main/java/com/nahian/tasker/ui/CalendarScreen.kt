@@ -77,7 +77,7 @@ fun CalendarScreen(nav: NavController, startKind: String) {
         else courses.firstOrNull { it.id == ownerId }?.let { c -> listOf(c.code, c.title).filter { it.isNotBlank() }.joinToString(" · ") } ?: "Class"
     fun good(s: String) = s == "DONE" || s == "ATTENDED"
 
-    Screen("Calendar", onBack = { nav.popBackStack() }, accent = moduleColor(kind.let { if (it == "TUITION") "TUITION" else "CLASS" }), icon = Icons.Filled.DateRange) {
+    Screen("Calendar", onBack = { nav.popBackStack() }, backLabel = "Schedule") {
         Segmented(listOf("TUITION" to "Tuitions", "CLASS" to "Classes"), kind) { kind = it; filterId = 0L }
         Dropdown(
             "Show",

@@ -38,8 +38,7 @@ fun NotesScreen(nav: NavController) {
     var search by rememberSaveable { mutableStateOf("") }
     val categories = notes.map { it.category }.filter { it.isNotBlank() }.distinct().sorted()
 
-    Screen("Notes", accent = NoteColor, icon = Icons.Filled.Edit) {
-        Button(onClick = { nav.navigate("noteEdit/0") }, modifier = Modifier.fillMaxWidth()) { Text("New note") }
+    Screen("Notes", onAdd = { nav.navigate("noteEdit/0") }) {
         Field("Search notes", search, { search = it })
         if (categories.isNotEmpty()) Choice(listOf("" to "All") + categories.map { it to it }, category) { category = it }
 
@@ -83,7 +82,8 @@ fun NoteEditScreen(nav: NavController, id: Long) {
         }
     }
 
-    Screen(if (id == 0L) "New note" else "Edit note", onBack = { nav.popBackStack() }) {
+    val saveAction = remember { Ref<() -> Unit>({}) }
+    FormScreen(if (id == 0L) "New note" else "Edit note", onCancel = { nav.popBackStack() }, save = saveAction) {
         Field("Title", title, { title = it })
         OutlinedTextField(
             value = body,
@@ -97,8 +97,7 @@ fun NoteEditScreen(nav: NavController, id: Long) {
         SwitchRow("Pin to the top", pinned) { pinned = it }
         if (error.isNotEmpty()) Text(error, color = Warn)
 
-        Button(
-            onClick = {
+        saveAction.value = {
                 val finalTitle = title.trim().ifEmpty { body.trim().lineSequence().firstOrNull()?.take(40) ?: "" }
                 if (finalTitle.isEmpty()) error = "Write a title or some text first." else scope.launch {
                     val n = (existing ?: Note(title = "")).copy(
@@ -107,9 +106,7 @@ fun NoteEditScreen(nav: NavController, id: Long) {
                     if (n.id == 0L) app.notes.insert(n) else app.notes.update(n)
                     nav.popBackStack()
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save") }
+        }
 
         existing?.let { n ->
             ConfirmButton("Delete note", "Delete \"${n.title}\"? This cannot be undone.", Modifier.fillMaxWidth(), outlined = true) {

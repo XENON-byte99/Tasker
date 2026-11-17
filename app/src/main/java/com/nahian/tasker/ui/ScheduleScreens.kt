@@ -3,6 +3,12 @@
 package com.nahian.tasker.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -64,7 +70,7 @@ private fun payLabel(t: Tuition): String = when (t.payModel) {
 @Composable
 fun ScheduleScreen(nav: NavController) {
     var tab by rememberSaveable { mutableStateOf("TUITIONS") }
-    Screen("Schedule", accent = moduleColor("CLASS"), icon = Icons.Filled.DateRange) {
+    Screen("Schedule", onAdd = { nav.navigate(if (tab == "TUITIONS") "tuitionEdit/0" else "courseEdit/0") }) {
         Segmented(listOf("TUITIONS" to "Tuitions", "CLASSES" to "Classes"), tab) { tab = it }
         OutlinedButton(onClick = { nav.navigate("calendar/" + if (tab == "TUITIONS") "TUITION" else "CLASS") }, modifier = Modifier.fillMaxWidth()) { Text("Calendar view") }
         if (tab == "TUITIONS") TuitionsTab(nav) else ClassesTab(nav)
@@ -143,7 +149,6 @@ private fun TuitionsTab(nav: NavController) {
             }
         }
     }
-    Button(onClick = { nav.navigate("tuitionEdit/0") }, modifier = Modifier.fillMaxWidth()) { Text("Add tuition") }
 }
 
 @Composable
@@ -162,40 +167,63 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
     var backfill by remember { mutableStateOf(false) }
 
     Screen(
-        title = t?.name ?: "Tuition",
-        onBack = { nav.popBackStack() },
-        actions = { TextButton(onClick = { nav.navigate("tuitionEdit/$id") }) { Text("Edit times") } },
+        title = if (t == null) "Tuition" else listOf(t.name, t.subject).filter { it.isNotBlank() }.joinToString(" · "),
+        onBack = { nav.popBackStack() }, backLabel = "Tuitions",
+        sub = if (t == null) null else "${weekdaysLabel(t.days)} · ${fmtTime(t.startMin)} · ${t.durationMin} min",
+        actions = { OutlinedButton(onClick = { nav.navigate("tuitionEdit/$id") }) { Text("Edit times") } },
     ) {
         if (t == null) { Text("This tuition was removed."); return@Screen }
-        Text("${weekdaysLabel(t.days)} · ${fmtTime(t.startMin)} · ${t.durationMin} min · ${payLabel(t)}", color = Muted)
-
+        val skin = Skins.current
         val open = sets.firstOrNull { it.status == "OPEN" }
-        SectionCard(if (open != null) "Set ${open.number} · started ${fmtDate(open.startDate)}" else "Current set", accent = moduleColor("TUITION")) {
+        var noteEdit by remember { mutableStateOf(false) }
+        val doneInOpen = if (open == null) 0 else sessions.count { it.setId == open.id && it.status == "DONE" }
+
+        // Current set: header line, big day counter, one segment per day, set note.
+        SectionCard {
             if (open == null) {
+                Eyebrow("Current set")
                 Text("A new set starts when you mark the next day as done.")
             } else {
-                val done = sessions.count { it.setId == open.id && it.status == "DONE" }
-                Text(
-                    if (open.targetDays > 0) "Day $done of ${open.targetDays}" else "$done days this month",
-                    style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
-                )
-                if (open.targetDays > 0) {
-                    if (open.targetDays <= 20) SegBar(done, open.targetDays, moduleColor("TUITION")) else LinearProgressIndicator(progress = { (done.toFloat() / open.targetDays).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Eyebrow("Set ${open.number} · started ${fmtDate(open.startDate)}", Modifier.weight(1f))
+                    Text(
+                        if (open.targetDays > 0) "${money(open.fee)} due at day ${open.targetDays}" else "${money(open.fee)} a month",
+                        style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = Muted,
+                    )
                 }
-                var note by remember(open.id) { mutableStateOf(open.note) }
-                Field("Note for this whole set", note, { note = it })
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { scope.launch { app.repo.saveSetNote(open.id, note) } }) { Text("Save note") }
-                    OutlinedButton(onClick = { paying = open }) { Text("Record payment") }
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Day $doneInOpen", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+                    if (open.targetDays > 0) Text("of ${open.targetDays}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Muted, modifier = Modifier.padding(bottom = 6.dp))
                 }
+                if (open.targetDays in 1..20) SegBar(doneInOpen, open.targetDays, moduleColor("TUITION"))
+                else if (open.targetDays > 20) LinearProgressIndicator(progress = { (doneInOpen.toFloat() / open.targetDays).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(skin.chipBg).clickable { noteEdit = true }.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Eyebrow("Set note")
+                    Text(open.note.ifBlank { "Tap to write a note for this whole set" }, style = MaterialTheme.typography.bodyMedium, color = if (open.note.isBlank()) Muted else skin.text)
+                }
+                OutlinedButton(onClick = { paying = open }) { Text("Record payment") }
             }
+        }
+        if (noteEdit && open != null) {
+            var note by remember(open.id) { mutableStateOf(open.note) }
+            AlertDialog(
+                onDismissRequest = { noteEdit = false },
+                title = { Text("Note for set ${open.number}") },
+                text = { Field("Note for this whole set", note, { note = it }) },
+                confirmButton = { TextButton(onClick = { scope.launch { app.repo.saveSetNote(open.id, note) }; noteEdit = false }) { Text("Save") } },
+                dismissButton = { TextButton(onClick = { noteEdit = false }) { Text("Cancel") } },
+            )
         }
 
         val unpaid = sets.filter { it.status == "COMPLETE" && it.fee > it.paidAmount }
         if (unpaid.isNotEmpty()) {
-            SectionCard("Payment due", container = WarnBg) {
+            SectionCard(container = WarnBg) {
+                Eyebrow("Payment due", color = Warn)
                 unpaid.forEach { s ->
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Line("Set ${s.number}", "Fee ${money(s.fee)} · paid ${money(s.paidAmount)}", modifier = Modifier.weight(1f))
                         Button(onClick = { paying = s }) { Text("Collect ${money(s.fee - s.paidAmount)}") }
                     }
@@ -203,29 +231,37 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
             }
         }
 
-        SectionCard("Days", accent = moduleColor("TUITION")) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { addDay = true }) { Text("Add a day") }
-                OutlinedButton(onClick = { backfill = true }) { Text("Add past days") }
+        // Days: date on the left, status and that day's note on the right.
+        SectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Eyebrow("Days", Modifier.weight(1f))
+                TextButton(onClick = { addDay = true }) { Text("Add a day") }
+                TextButton(onClick = { backfill = true }) { Text("Add past days") }
             }
             if (sessions.isEmpty()) Text("No days yet.", color = Muted)
-            sessions.take(40).forEach { s ->
-                val label = when (s.status) { "DONE" -> "Done"; "MISSED" -> "Missed · not counted"; else -> "Planned" }
-                Line(
-                    fmtDate(s.date) + " · " + fmtTime(s.startMin),
-                    if (s.note.isBlank()) "Tap to mark, move or add a note" else s.note,
-                    label,
-                    when (s.status) { "DONE" -> Teal; "MISSED" -> Warn; else -> Muted },
-                    Modifier.clickable { editing = s },
-                )
-                HorizontalDivider()
+            val shown = sessions.take(40)
+            shown.forEachIndexed { index, s ->
+                val number = if (s.status == "DONE") sessions.filter { it.setId == s.setId && it.status == "DONE" }.sortedBy { it.date }.indexOfFirst { it.id == s.id } + 1 else 0
+                Row(Modifier.fillMaxWidth().clickable { editing = s }, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(fmtDate(s.date), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(92.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            when (s.status) { "DONE" -> "Done · day $number"; "MISSED" -> "Missed · not counted"; else -> "Planned · " + fmtTime(s.startMin) },
+                            fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium,
+                            color = when (s.status) { "DONE" -> moduleColor("TUITION"); "MISSED" -> Warn; else -> Muted },
+                        )
+                        Text(s.note.ifBlank { "Add a note" }, style = MaterialTheme.typography.bodySmall, color = Muted)
+                    }
+                }
+                if (index < shown.size - 1) RowDivider()
             }
         }
 
-        SectionCard("Income from this tuition", accent = moduleColor("TUITION")) {
-            val total = sets.sumOf { it.paidAmount }
-            Text(money(total), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            sets.filter { it.paidAmount > 0 }.forEach { Line("Set ${it.number}", "Started ${fmtDate(it.startDate)}", money(it.paidAmount)) }
+        // Two money tiles, as at the bottom of the design.
+        val earned = if (open != null && open.targetDays > 0) open.fee * doneInOpen / open.targetDays else 0L
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            Stat("Received so far", money(sets.sumOf { it.paidAmount }), Modifier.weight(1f))
+            Stat("Earned in this set", money(earned), Modifier.weight(1f))
         }
     }
 
@@ -383,7 +419,8 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
         }
     }
 
-    Screen(if (id == 0L) "New tuition" else "Edit tuition", onBack = { nav.popBackStack() }) {
+    val saveAction = remember { Ref<() -> Unit>({}) }
+    FormScreen(if (id == 0L) "New tuition" else "Edit tuition", onCancel = { nav.popBackStack() }, save = saveAction) {
         Field("Student or batch", name, { name = it })
         Field("Subject", subject, { subject = it })
         Text("Weekly days", style = MaterialTheme.typography.labelLarge)
@@ -415,8 +452,7 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
         Field("Address, phone or note (optional)", note, { note = it })
         if (error.isNotEmpty()) Text(error, color = Warn)
 
-        Button(
-            onClick = {
+        saveAction.value = {
                 val startMin = parseTimeOrNull(start)
                 error = when {
                     name.isBlank() -> "Enter the student's name."
@@ -436,9 +472,7 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
                     parseDateOrNull(since)?.let { app.repo.backfillTuition(savedId, it.toString()) }
                     nav.popBackStack()
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save") }
+        }
 
         existing?.let { t ->
             ConfirmButton(
@@ -471,19 +505,48 @@ private fun ClassesTab(nav: NavController) {
     todays.forEach { s ->
         val c = courses.firstOrNull { it.id == s.courseId }
         val slot = slots.firstOrNull { it.id == s.slotId }
-        SectionCard(accent = moduleColor("CLASS")) {
-            Line(
-                listOf(c?.code ?: "", c?.title ?: "").filter { it.isNotBlank() }.joinToString(" · "),
-                fmtTime(s.startMin) + (slot?.let { " – " + fmtTime(it.endMin) + (if (it.room.isBlank()) "" else " · Room " + it.room) + " · " + it.type.lowercase() } ?: ""),
-                when (s.status) { "ATTENDED" -> "Attended"; "MISSED" -> "Missed"; "CANCELLED" -> "Cancelled"; else -> "" },
-                if (s.status == "MISSED") Warn else Teal,
+        val attended = sessions.count { it.courseId == s.courseId && it.status == "ATTENDED" }
+        val missedCount = sessions.count { it.courseId == s.courseId && it.status == "MISSED" }
+        val pct = if (attended + missedCount == 0) null else attended * 100 / (attended + missedCount)
+        val low = pct != null && c != null && pct < c.minAttendance
+        val past = s.date < today() || (s.date == today() && s.startMin <= com.nahian.tasker.core.nowMinutes())
+        SectionCard {
+            // Time range on the left, status on the right, as in the routine design.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    fmtTime(s.startMin) + (slot?.let { " – " + fmtTime(it.endMin) } ?: ""),
+                    color = moduleColor("CLASS"), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f),
+                )
+                Text(
+                    when (s.status) { "ATTENDED" -> "Attended"; "MISSED" -> "Missed"; "CANCELLED" -> "Cancelled"; else -> if (past) "Needs marking" else "Planned" },
+                    style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
+                    color = when (s.status) { "ATTENDED" -> moduleColor("TUITION"); "MISSED" -> Warn; "CANCELLED" -> Muted; else -> if (past) Warn else Muted },
+                )
+            }
+            Text(listOf(c?.code ?: "", c?.title ?: "").filter { it.isNotBlank() }.joinToString(" · ").ifEmpty { "Class" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                listOf(
+                    slot?.type?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "Rescheduled",
+                    if (slot != null && slot.room.isNotBlank()) "Room " + slot.room else "",
+                    if (pct != null) "Attendance $pct%" + (if (low) ", below your ${c?.minAttendance}% limit" else "") else "",
+                ).filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall, color = if (low) Warn else Muted, fontWeight = if (low) FontWeight.SemiBold else FontWeight.Normal,
             )
-            if (s.note.isNotBlank()) Text(s.note, style = MaterialTheme.typography.bodySmall)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(s.id, "ATTENDED", s.note) } }) { Text("Attended") }
-                OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(s.id, "MISSED", s.note) } }) { Text("Missed") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                val pad = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)
+                Button(onClick = { scope.launch { app.repo.markClassSession(s.id, "ATTENDED", s.note) } }, contentPadding = pad, modifier = Modifier.weight(1f)) { Text("Attended", maxLines = 1, softWrap = false) }
+                OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(s.id, "MISSED", s.note) } }, contentPadding = pad, modifier = Modifier.weight(1f)) { Text("Missed", maxLines = 1, softWrap = false) }
+                OutlinedButton(onClick = { scope.launch { app.repo.markClassSession(s.id, "CANCELLED", s.note) } }, contentPadding = pad, modifier = Modifier.weight(1f)) { Text("Cancelled", maxLines = 1, softWrap = false) }
+            }
+            if (s.note.isNotBlank()) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Skins.current.chipBg).clickable { editing = s }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Eyebrow("Today's note")
+                    Text(s.note, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Row {
+                TextButton(onClick = { editing = s }) { Text(if (s.note.isBlank()) "Add note" else "Edit note") }
                 TextButton(onClick = { moving = s }) { Text("Reschedule") }
-                TextButton(onClick = { editing = s }) { Text("Note") }
             }
         }
     }
@@ -505,7 +568,6 @@ private fun ClassesTab(nav: NavController) {
             HorizontalDivider()
         }
     }
-    Button(onClick = { nav.navigate("courseEdit/0") }, modifier = Modifier.fillMaxWidth()) { Text("Add course") }
 
     moving?.let { s ->
         RescheduleDialog("Reschedule class", s.startMin, { moving = null }) { d, m -> scope.launch { app.repo.moveClassSession(s.id, d, m) } }
@@ -555,7 +617,8 @@ fun CourseEditScreen(nav: NavController, id: Long) {
         }
     }
 
-    Screen(if (id == 0L) "New course" else "Edit course", onBack = { nav.popBackStack() }) {
+    val saveAction = remember { Ref<() -> Unit>({}) }
+    FormScreen(if (id == 0L) "New course" else "Edit course", onCancel = { nav.popBackStack() }, save = saveAction) {
         Field("Course code", code, { code = it })
         Field("Course title", title, { title = it })
         Field("Teacher (optional)", teacher, { teacher = it })
@@ -590,8 +653,7 @@ fun CourseEditScreen(nav: NavController, id: Long) {
         Text("If you pick a date, every class from then until yesterday is added as Attended. Change the ones you missed in the calendar.", style = MaterialTheme.typography.bodySmall, color = Muted)
         if (error.isNotEmpty()) Text(error, color = Warn)
 
-        Button(
-            onClick = {
+        saveAction.value = {
                 error = when {
                     code.isBlank() -> "Enter the course code."
                     slots.isEmpty() -> "Add at least one weekly class time."
@@ -605,9 +667,7 @@ fun CourseEditScreen(nav: NavController, id: Long) {
                     parseDateOrNull(since)?.let { app.repo.backfillCourse(savedId, it.toString()) }
                     nav.popBackStack()
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save") }
+        }
 
         existing?.let { c ->
             ConfirmButton(

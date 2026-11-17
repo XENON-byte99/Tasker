@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun MoneyScreen(nav: NavController) {
     var tab by rememberSaveable { mutableStateOf("EXPENSES") }
-    Screen("Money", accent = moduleColor("MONEY"), icon = Icons.Filled.ShoppingCart) {
+    Screen("Money", onAdd = { nav.navigate(if (tab == "LOANS") "loanAdd" else "expenseAdd") }) {
         Segmented(listOf("EXPENSES" to "Expenses", "LOANS" to "Loans", "INCOME" to "Income"), tab) { tab = it }
         when (tab) {
             "EXPENSES" -> ExpensesTab(nav)
@@ -69,7 +69,6 @@ private fun ExpensesTab(nav: NavController) {
     val monthItems = expenses.filter { it.date.startsWith(month) }
     val monthTotal = monthItems.sumOf { it.amount }
 
-    Button(onClick = { nav.navigate("expenseAdd") }, modifier = Modifier.fillMaxWidth()) { Text("Add expense") }
 
     SectionCard("$month · by category", accent = moduleColor("MONEY")) {
         Text(money(monthTotal), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -131,15 +130,16 @@ fun ExpenseAddScreen(nav: NavController, id: Long = 0L) {
         }
     }
 
-    Screen(if (id == 0L) "New expense" else "Edit expense", onBack = { nav.popBackStack() }) {
-        Field("Amount (৳)", amount, { amount = it }, number = true)
+    val saveAction = remember { Ref<() -> Unit>({}) }
+    FormScreen(if (id == 0L) "New expense" else "Edit expense", onCancel = { nav.popBackStack() }, save = saveAction) {
+        BigAmount(amount) { amount = it }
         Text("Category", style = MaterialTheme.typography.labelLarge)
-        Choice(categories.map { it.id as Long? to it.name }, catId ?: categories.firstOrNull()?.id) { catId = it }
+        OptionGrid(categories.map { it.id as Long? to it.name }, catId ?: categories.firstOrNull()?.id, 3) { catId = it }
         TextButton(onClick = { newCat = "" }) { Text("New category") }
         Text("Date", style = MaterialTheme.typography.labelLarge)
-        Choice(
+        OptionGrid(
             listOf(today() to "Today", date(today()).minusDays(1).toString() to "Yesterday"),
-            dateTxt,
+            dateTxt, 2,
         ) { dateTxt = it }
         DateField("Or pick another date", dateTxt, { dateTxt = it })
         Field("Note (optional)", note, { note = it })
@@ -161,7 +161,7 @@ fun ExpenseAddScreen(nav: NavController, id: Long = 0L) {
                 if (thenClose) nav.popBackStack() else { amount = ""; note = "" }
             }
         }
-        Button(onClick = { save(true) }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
+        saveAction.value = { save(true) }
         if (id == 0L) OutlinedButton(onClick = { save(false) }, modifier = Modifier.fillMaxWidth()) { Text("Save and add another") }
     }
 
@@ -299,9 +299,10 @@ fun LoanAddScreen(nav: NavController) {
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
 
-    Screen("New loan entry", onBack = { nav.popBackStack() }) {
+    val saveAction = remember { Ref<() -> Unit>({}) }
+    FormScreen("New loan entry", onCancel = { nav.popBackStack() }, save = saveAction) {
         Text("What happened", style = MaterialTheme.typography.labelLarge)
-        Choice(listOf("BORROWED" to "I borrowed", "LENT" to "I lent", "PAID_BACK" to "I paid back", "GOT_BACK" to "I got paid back"), kind) { kind = it }
+        OptionGrid(listOf("BORROWED" to "I borrowed", "LENT" to "I lent", "PAID_BACK" to "I paid back", "GOT_BACK" to "I got paid back"), kind, 2) { kind = it }
         Field("Person", person, { person = it })
         if (persons.isNotEmpty()) Choice(persons.map { it.name to it.name }, person) { person = it }
         Field("Amount (৳)", amount, { amount = it }, number = true)
@@ -309,8 +310,7 @@ fun LoanAddScreen(nav: NavController) {
         if (kind == "BORROWED" || kind == "LENT") DateField("Pay back by (optional)", due, { due = it }, optional = true)
         Field("Note (optional)", note, { note = it })
         if (error.isNotEmpty()) Text(error, color = Warn)
-        Button(
-            onClick = {
+        saveAction.value = {
                 val a = parseMoney(amount)
                 val d = parseDateOrNull(dateTxt)
                 val dueDate = if (due.isBlank()) null else parseDateOrNull(due)
@@ -325,9 +325,7 @@ fun LoanAddScreen(nav: NavController) {
                     app.repo.addLoanEntry(kind, person, a, d.toString(), dueDate?.toString(), note.trim())
                     nav.popBackStack()
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save") }
+        }
     }
 }
 

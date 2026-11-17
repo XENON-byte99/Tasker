@@ -4,6 +4,11 @@ package com.nahian.tasker.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Button
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
@@ -113,9 +118,12 @@ fun TaskerTheme(content: @Composable () -> Unit) {
 @Composable
 fun taskerApp(): TaskerApp = LocalContext.current.applicationContext as TaskerApp
 
+/** Holds a value that a page header can call, filled in by the page body. */
+class Ref<T>(var value: T)
+
 /**
- * Standard page: a coloured icon badge and title, optional back arrow and actions,
- * a gradient line in the page's colour, then scrolling content.
+ * Standard page, laid out as in the screen designs: an optional "‹ Parent" link, a large
+ * title with an optional line under it, optional actions and a round + button on the right.
  */
 @Composable
 fun Screen(
@@ -124,32 +132,112 @@ fun Screen(
     actions: @Composable RowScope.() -> Unit = {},
     accent: Color = Teal,
     icon: ImageVector? = null,
+    sub: String? = null,
+    backLabel: String = "Back",
+    onAdd: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val skin = Skins.current
     Column(
-        Modifier.fillMaxSize().background(Skins.current.bg).imePadding()
-            .verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxSize().background(skin.bg).imePadding()
+            .verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            Column(Modifier.weight(1f)) {
+                if (onBack != null) {
+                    Text(
+                        "‹ $backLabel", color = skin.accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onBack() }.padding(vertical = 10.dp, horizontal = 2.dp),
+                    )
+                }
+                Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
+                if (sub != null) Text(sub, style = MaterialTheme.typography.bodyMedium, color = skin.muted)
             }
-            if (icon != null) {
-                Box(
-                    Modifier.size(42.dp).background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.65f))), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(icon, contentDescription = null, tint = if (accent.luminance() > 0.5f) Color.Black else Color.White, modifier = Modifier.size(24.dp)) }
-                Spacer(Modifier.width(10.dp))
-            }
-            Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             actions()
+            if (onAdd != null) {
+                Box(
+                    Modifier.padding(start = 8.dp).size(46.dp).clip(CircleShape).background(skin.hero).clickable { onAdd() },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.Add, contentDescription = "Add", tint = skin.onHero) }
+            }
         }
-        Box(Modifier.fillMaxWidth().height(4.dp).background(Brush.horizontalGradient(listOf(accent, accent.copy(alpha = 0.12f))), RoundedCornerShape(2.dp)))
         content()
     }
 }
 
+/** Form page, as in the "Add" designs: Cancel on the left, title in the middle, Save on the right. */
+@Composable
+fun FormScreen(title: String, onCancel: () -> Unit, save: Ref<() -> Unit>, content: @Composable ColumnScope.() -> Unit) {
+    val skin = Skins.current
+    Column(
+        Modifier.fillMaxSize().background(skin.bg).imePadding()
+            .verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            Button(onClick = { save.value() }, shape = RoundedCornerShape(12.dp)) { Text("Save") }
+        }
+        content()
+    }
+}
+
+/** A grid of equal buttons where one is chosen, e.g. expense categories three across. */
+@Composable
+fun <T> OptionGrid(options: List<Pair<T, String>>, selected: T, columns: Int, onSelect: (T) -> Unit) {
+    val skin = Skins.current
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.chunked(columns).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { (value, label) ->
+                    val on = value == selected
+                    val shape = RoundedCornerShape(12.dp)
+                    Box(
+                        Modifier.weight(1f).clip(shape)
+                            .then(if (on) Modifier.background(skin.accent) else Modifier.background(skin.card).border(1.dp, skin.border, shape))
+                            .clickable { onSelect(value) }.padding(vertical = 13.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(label, color = if (on) skin.onAccent else skin.text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                    }
+                }
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** The large centred amount box from the "New expense" design. */
+@Composable
+fun BigAmount(value: String, onChange: (String) -> Unit) {
+    val skin = Skins.current
+    SectionCard {
+        Text("AMOUNT (৳)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = skin.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.displayMedium.copy(textAlign = TextAlign.Center, color = skin.text, fontWeight = FontWeight.ExtraBold),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            cursorBrush = SolidColor(skin.accent),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.Center) {
+                    if (value.isEmpty()) Text("0", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold, color = skin.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+/** A small uppercase heading inside a card, as in the designs. */
+@Composable
+fun Eyebrow(text: String, modifier: Modifier = Modifier, color: Color = Muted) {
+    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = color, modifier = modifier)
+}
 
 @Composable
 fun RowDivider() {
@@ -170,12 +258,9 @@ fun SectionCard(title: String? = null, container: Color = CardBg, accent: Color?
         shape = RoundedCornerShape(skin.radius.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        if (accent != null) Box(Modifier.fillMaxWidth().height(5.dp).background(accent))
-        Column(Modifier.animateContentSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (title != null) {
-                Text(title.uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = accent ?: skin.text)
-                RowDivider()
-            }
+        // As in the designs: a small uppercase heading, no bar and no rule under it.
+        Column(Modifier.animateContentSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (title != null) Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = accent ?: skin.muted)
             content()
         }
     }
@@ -225,7 +310,7 @@ fun <T> Dropdown(label: String, options: List<Pair<T, String>>, selected: T, onS
 }
 
 @Composable
-fun Stat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) {
+fun Stat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified, sub: String = "", subColor: Color = Muted) {
     val skin = Skins.current
     Card(
         colors = CardDefaults.cardColors(containerColor = skin.card, contentColor = skin.text),
@@ -234,9 +319,10 @@ fun Stat(label: String, value: String, modifier: Modifier = Modifier, color: Col
         shape = RoundedCornerShape(skin.radius.dp),
         modifier = modifier,
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(label, style = MaterialTheme.typography.bodySmall, color = skin.muted)
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color)
+            if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = subColor)
         }
     }
 }
