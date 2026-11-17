@@ -14,6 +14,16 @@ import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -177,14 +187,62 @@ private fun sizeLabel(bytes: Long): String = when {
     else -> "$bytes B"
 }
 
+/** A round (or square) badge with a letter or short label, tinted in one colour. */
+@Composable
+private fun Badge(label: String, color: Color, square: Boolean = false) {
+    Box(
+        Modifier.size(46.dp).clip(if (square) RoundedCornerShape(12.dp) else CircleShape).background(color.copy(alpha = 0.18f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = color, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
+            style = if (label.length > 1) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium)
+    }
+}
+
+private fun tint(seed: String): Color =
+    moduleColor(listOf("TUITION", "CLASS", "PRAYER", "TASK", "MONEY")[(seed.lowercase().hashCode() and 0x7fffffff) % 5])
+
+/** 0 (very weak) to 4 (strong), from length and variety of characters. */
+private fun strength(pw: String): Int {
+    if (pw.isEmpty()) return 0
+    val kinds = listOf(pw.any { it.isLowerCase() }, pw.any { it.isUpperCase() }, pw.any { it.isDigit() }, pw.any { !it.isLetterOrDigit() }).count { it }
+    return when {
+        pw.length >= 14 && kinds >= 3 -> 4
+        pw.length >= 10 && kinds >= 3 -> 3
+        pw.length >= 8 && kinds >= 2 -> 2
+        else -> 1
+    }
+}
+
 @Composable
 fun VaultScreen(nav: NavController) {
     var tab by rememberSaveable { mutableStateOf("PASSWORDS") }
     VaultGate(nav, "Vault") {
+        val app = taskerApp()
+        val ctx = LocalContext.current
+        val skin = Skins.current
+        val secrets by rememberFlow { app.vault.flowSecrets() }
+        val docs by rememberFlow { app.vault.flowDocs() }
+
+        // Summary card in the look's main gradient.
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape((skin.radius + 4).dp)).background(skin.hero).padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("PROTECTED", color = skin.onHero, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text("${secrets.size} passwords · ${docs.size} files", color = skin.onHero, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                Text("Encrypted with your master password", color = skin.onHero, style = MaterialTheme.typography.bodySmall)
+            }
+            OutlinedButton(
+                onClick = { Vault.lock(ctx.applicationContext) },
+                border = BorderStroke(1.dp, skin.onHero),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = skin.onHero),
+            ) { Text("Lock") }
+        }
+
         Segmented(listOf("PASSWORDS" to "Passwords", "FILES" to "Files"), tab) { tab = it }
         if (tab == "PASSWORDS") PasswordsTab(nav) else FilesTab()
-        val ctx = LocalContext.current
-        OutlinedButton(onClick = { Vault.lock(ctx.applicationContext) }, modifier = Modifier.fillMaxWidth()) { Text("Lock now") }
     }
 }
 
@@ -194,23 +252,49 @@ private fun PasswordsTab(nav: NavController) {
     val ctx = LocalContext.current
     val secrets by rememberFlow { app.vault.flowSecrets() }
     var search by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
+    var revealed by remember { mutableStateOf(setOf<Long>()) }
+    val categories = secrets.map { it.category }.filter { it.isNotBlank() }.distinct().sorted()
 
     Button(onClick = { nav.navigate("secretEdit/0") }, modifier = Modifier.fillMaxWidth()) { Text("Add password") }
-    if (secrets.size > 4) Field("Search", search, { search = it })
+    Field("Search passwords", search, { search = it })
+    if (categories.isNotEmpty()) Choice(listOf("" to "All") + categories.map { it to it }, category) { category = it }
     if (message.isNotEmpty()) Text(message, color = VaultColor)
-    val shown = secrets.filter { search.isBlank() || it.title.contains(search.trim(), true) || it.url.contains(search.trim(), true) || it.category.contains(search.trim(), true) }
-    if (shown.isEmpty()) Text(if (secrets.isEmpty()) "No passwords saved yet." else "Nothing matches.", color = Muted)
-    shown.forEach { s ->
-        val user = remember(s.id, s.usernameEnc, Vault.unlocked.value) { Vault.dec(s.usernameEnc) }
-        SectionCard(accent = VaultColor) {
-            Column(Modifier.fillMaxWidth().clickable { nav.navigate("secretEdit/${s.id}") }) {
-                Text(s.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                if (user.isNotEmpty()) Text(user)
-                Text(listOf(s.url, s.category).filter { it.isNotBlank() }.joinToString(" · ").ifEmpty { "Tap to view or edit" }, style = MaterialTheme.typography.bodySmall, color = Muted)
+
+    val q = search.trim()
+    val shown = secrets.filter {
+        (category.isEmpty() || it.category == category) &&
+            (q.isEmpty() || it.title.contains(q, true) || it.url.contains(q, true) || it.category.contains(q, true))
+    }
+    if (shown.isEmpty()) {
+        Text(if (secrets.isEmpty()) "No passwords saved yet. Add your first one above." else "Nothing matches.", color = Muted)
+        return
+    }
+    SectionCard {
+        shown.forEachIndexed { index, s ->
+            val user = remember(s.id, s.usernameEnc, Vault.unlocked.value) { Vault.dec(s.usernameEnc) }
+            val open = s.id in revealed
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Badge(s.title.take(1).uppercase().ifEmpty { "?" }, tint(s.title))
+                Column(Modifier.weight(1f).clickable { nav.navigate("secretEdit/${s.id}") }) {
+                    Text(s.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text(user.ifEmpty { "No username" }, style = MaterialTheme.typography.bodyMedium, color = Muted)
+                    if (s.url.isNotBlank() || s.category.isNotBlank()) {
+                        Text(listOf(s.url, s.category).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Muted)
+                    }
+                }
+                TextButton(onClick = { nav.navigate("secretEdit/${s.id}") }) { Text("Edit") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = {
+            // The password itself: dots until you ask to see it.
+            Text(
+                if (open) Vault.dec(s.passwordEnc).ifEmpty { "(no password saved)" } else "••••••••••••",
+                fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.fillMaxWidth().background(Skins.current.chipBg, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { revealed = if (open) revealed - s.id else revealed + s.id }) { Text(if (open) "Hide" else "Show") }
+                TextButton(onClick = {
                     val pw = Vault.dec(s.passwordEnc)
                     copySecret(ctx, "password", pw)
                     message = "Password for ${s.title} copied. It is cleared in 30 seconds."
@@ -224,6 +308,7 @@ private fun PasswordsTab(nav: NavController) {
                 }) { Text("Copy password") }
                 if (user.isNotEmpty()) TextButton(onClick = { copySecret(ctx, "username", user); message = "Username copied." }) { Text("Copy username") }
             }
+            if (index < shown.size - 1) RowDivider()
         }
     }
 }
@@ -253,6 +338,11 @@ fun SecretEditScreen(nav: NavController, id: Long) {
         Field("Name (for example Gmail, bKash, University portal)", title, { title = it })
         Field("Username, email or phone", username, { username = it })
         PasswordField("Password", password) { password = it }
+        if (password.isNotEmpty()) {
+            val score = strength(password)
+            SegBar(score, 4, if (score >= 3) VaultColor else Warn)
+            Text(listOf("", "Weak: easy to guess", "Fair: longer would be safer", "Good", "Strong")[score], style = MaterialTheme.typography.bodySmall, color = if (score >= 3) VaultColor else Warn)
+        }
         OutlinedButton(onClick = { password = Vault.generatePassword() }) { Text("Generate a strong password") }
         Field("Website or app (optional)", url, { url = it })
         Field("Category (optional)", category, { category = it })
@@ -309,13 +399,26 @@ private fun FilesTab() {
     Text("Files are copied into Tasker and encrypted. The original stays where it was; delete it yourself if you want only the protected copy. Up to 40 MB each.", style = MaterialTheme.typography.bodySmall, color = Muted)
     if (message.isNotEmpty()) Text(message, color = VaultColor)
     if (docs.isEmpty()) Text("No files yet.", color = Muted)
-    docs.forEach { d ->
-        SectionCard(accent = VaultColor) {
-            Text(d.name, fontWeight = FontWeight.Bold)
-            Text(
-                listOf(d.category, sizeLabel(d.size), "added " + fmtMillis(d.addedAt)).filter { it.isNotBlank() }.joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall, color = Muted,
-            )
+    if (docs.isNotEmpty()) SectionCard {
+        docs.forEachIndexed { index, d ->
+            val (kind, color) = when {
+                d.mime.startsWith("image/") -> "IMG" to moduleColor("CLASS")
+                d.mime == "application/pdf" -> "PDF" to moduleColor("MONEY")
+                d.mime.contains("word") || d.mime.contains("document") -> "DOC" to moduleColor("PRAYER")
+                d.mime.contains("sheet") || d.mime.contains("excel") -> "XLS" to moduleColor("TUITION")
+                d.mime.startsWith("text/") -> "TXT" to moduleColor("TASK")
+                else -> "FILE" to Muted
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Badge(kind, color, square = true)
+                Column(Modifier.weight(1f)) {
+                    Text(d.name, fontWeight = FontWeight.Bold, maxLines = 2)
+                    Text(
+                        listOf(d.category, sizeLabel(d.size), fmtMillis(d.addedAt)).filter { it.isNotBlank() }.joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall, color = Muted,
+                    )
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Button(onClick = {
                     scope.launch {
@@ -336,6 +439,7 @@ private fun FilesTab() {
                 TextButton(onClick = { editing = d }) { Text("Rename") }
                 ConfirmButton("Delete", "Delete \"${d.name}\" from the vault? This cannot be undone.") { scope.launch { Vault.deleteFile(ctx.applicationContext, d) } }
             }
+            if (index < docs.size - 1) RowDivider()
         }
     }
 
