@@ -262,6 +262,13 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         if (share > 0) prefs.setRepayPool(prefs.repayPool.longValue + amount * share / 100)
     }
 
+    /** Makes the recorded balance match the user's real money by adding one correction line. */
+    suspend fun correctBalance(current: Long, target: Long) {
+        val diff = target - current
+        if (diff == 0L) return
+        dao.insertTxn(Txn(date = today(), amount = Math.abs(diff), type = if (diff > 0) "ADJUST_IN" else "ADJUST_OUT", note = "Balance correction"))
+    }
+
     /** kind: BORROWED, LENT, PAID_BACK, GOT_BACK */
     suspend fun addLoanEntry(kind: String, personName: String, amount: Long, date: String, due: String?, note: String) {
         val name = personName.trim()

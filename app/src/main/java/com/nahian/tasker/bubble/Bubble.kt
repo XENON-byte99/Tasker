@@ -315,7 +315,7 @@ private fun QuickPanel(onFocus: (String) -> Unit, onOpenApp: () -> Unit, onClose
             TextButton(onClick = onClose) { Text("Close") }
         }
 
-        val soon = reminders.filter { it.fireAt < System.currentTimeMillis() + 24 * 60 * 60_000L }.take(4)
+        val soon = reminders.filter { it.fireAt < System.currentTimeMillis() + 24 * 60 * 60_000L && !it.rkey.startsWith("TUIM:") && !it.rkey.startsWith("CLSM:") }.take(4)
         val first = soon.firstOrNull()
         Column(
             Modifier.fillMaxWidth().background(Skins.current.chipBg, RoundedCornerShape(16.dp)).padding(14.dp),

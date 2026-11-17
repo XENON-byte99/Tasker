@@ -216,6 +216,7 @@ fun HomeScreen(nav: NavController) {
     var openT by remember { mutableStateOf<TuitionSession?>(null) }
     var openC by remember { mutableStateOf<ClassSession?>(null) }
     var doneTask by remember { mutableStateOf<com.nahian.tasker.data.Task?>(null) }
+    var showBalance by remember { mutableStateOf(false) }
 
     Screen(
         title = "Today",
@@ -230,7 +231,8 @@ fun HomeScreen(nav: NavController) {
         // The single most important thing right now, with a live countdown.
         val tick by produceState(0) { while (true) { delay(30_000); value = value + 1 } }
         val nowMs = remember(tick, reminders) { System.currentTimeMillis() }
-        val soon = reminders.filter { it.fireAt < nowMs + 24 * 60 * 60_000L }
+        // The "did you teach / attend?" follow-ups are the same session again, so they are not listed as upcoming.
+        val soon = reminders.filter { it.fireAt < nowMs + 24 * 60 * 60_000L && !it.rkey.startsWith("TUIM:") && !it.rkey.startsWith("CLSM:") }
         fun openReminder(r: Reminder) {
             when (r.module) {
                 "TUITION" -> openT = tSessions.firstOrNull { it.id == r.sourceId }
@@ -274,9 +276,11 @@ fun HomeScreen(nav: NavController) {
             DaysAgenda({ openT = it }, { openC = it }, { nav.navigate("taskEdit/${it.id}") })
         }
 
-        if (soon.size > 1) {
+        // Tuitions and classes already appear in the day list above, so "Later" shows only the rest.
+        val later = soon.drop(1).filter { it.module != "TUITION" && it.module != "CLASS" }.take(5)
+        if (later.isNotEmpty()) {
             SectionCard("Later") {
-                soon.drop(1).take(5).forEach { r ->
+                later.forEach { r ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f).clickable { openReminder(r) }) {
                             Tag(r.module)
@@ -331,10 +335,10 @@ fun HomeScreen(nav: NavController) {
 
         val spent = txns.filter { it.type == "EXPENSE" && it.date == day }.sumOf { it.amount }
         val build = remember { Updater.currentBuild(ctx) }
-        val balance = txns.sumOf { if (it.type in listOf("INCOME", "LOAN_IN", "REPAY_IN")) it.amount else -it.amount }
+        val balance = txns.sumOf { if (it.type in listOf("INCOME", "LOAN_IN", "REPAY_IN", "ADJUST_IN")) it.amount else -it.amount }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             Stat("Spent today", money(spent), Modifier.weight(1f).clickable { nav.navigate("money") })
-            Stat("Balance", money(balance), Modifier.weight(1f).clickable { nav.navigate("money") })
+            Stat("Balance", money(balance), Modifier.weight(1f).clickable { showBalance = true })
         }
         Text("Design", style = MaterialTheme.typography.labelLarge, color = Muted)
         Segmented(Skins.all.map { it.id to it.label }, Skins.current.id) { app.prefs.setSkin(it) }
@@ -346,6 +350,38 @@ fun HomeScreen(nav: NavController) {
     }
 
     doneTask?.let { t -> CompleteTaskDialog(t) { doneTask = null } }
+    if (showBalance) {
+        fun sum(type: String) = txns.filter { it.type == type }.sumOf { it.amount }
+        val total = sum("INCOME") + sum("LOAN_IN") + sum("REPAY_IN") + sum("ADJUST_IN") - sum("EXPENSE") - sum("LOAN_OUT") - sum("REPAY_OUT") - sum("ADJUST_OUT")
+        var real by remember { mutableStateOf("") }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showBalance = false },
+            title = { Text("How the balance is worked out") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Line("Income recorded", trailing = "+ " + money(sum("INCOME")))
+                    Line("Money you borrowed", trailing = "+ " + money(sum("LOAN_IN")))
+                    Line("Loans paid back to you", trailing = "+ " + money(sum("REPAY_IN")))
+                    Line("Expenses", trailing = "− " + money(sum("EXPENSE")))
+                    Line("Money you lent", trailing = "− " + money(sum("LOAN_OUT")))
+                    Line("Loans you paid back", trailing = "− " + money(sum("REPAY_OUT")))
+                    if (sum("ADJUST_IN") + sum("ADJUST_OUT") > 0) Line("Your corrections", trailing = money(sum("ADJUST_IN") - sum("ADJUST_OUT")))
+                    RowDivider()
+                    Line("Balance", trailing = money(total), trailingColor = Teal)
+                    Text("This counts only what you entered in Tasker. It starts from zero, not from the money you already had. If it is wrong, type what you really have and Tasker will correct it.", style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Field("Money I really have now (৳)", real, { real = it }, number = true)
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    val v = real.replace(",", "").trim().toDoubleOrNull()
+                    if (v != null && v >= 0) scope.launch { app.repo.correctBalance(total, Math.round(v * 100)) }
+                    showBalance = false
+                }) { Text(if (real.isBlank()) "Close" else "Set balance") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { nav.navigate("money"); showBalance = false }) { Text("Open Money") } },
+        )
+    }
     openT?.let { s -> TuitionSessionDialog(s) { openT = null } }
     openC?.let { s -> ClassSessionDialog(s) { openC = null } }
     moveT?.let { s ->

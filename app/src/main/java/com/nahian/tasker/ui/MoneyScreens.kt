@@ -196,6 +196,8 @@ private fun LoansTab(nav: NavController) {
     val owe = loans.filter { it.direction == "TAKEN" }.sumOf { outstanding(it.id, it.principal) }
     val owed = loans.filter { it.direction == "GIVEN" }.sumOf { outstanding(it.id, it.principal) }
 
+    Button(onClick = { nav.navigate("loanAdd") }, modifier = Modifier.fillMaxWidth()) { Text("Add loan entry") }
+
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
         Stat("You owe", money(owe), Modifier.weight(1f), color = if (owe > 0) Warn else Color.Unspecified)
         Stat("Owed to you", money(owed), Modifier.weight(1f), color = Teal)
@@ -222,42 +224,66 @@ private fun LoansTab(nav: NavController) {
         }
     }
 
-    SectionCard("People", accent = moduleColor("MONEY")) {
-        if (persons.isEmpty()) Text("No loans recorded yet.", color = Muted)
-        persons.forEach { p ->
-            val mine = loans.filter { it.personId == p.id }
+    // Open loans only. Settled ones are kept apart, further down, behind a button.
+    val active = persons.filter { p -> loans.any { it.personId == p.id && outstanding(it.id, it.principal) > 0 } }
+    val settled = loans.filter { outstanding(it.id, it.principal) == 0L }
+    SectionCard("Open loans", accent = moduleColor("MONEY")) {
+        if (active.isEmpty()) Text(if (loans.isEmpty()) "No loans recorded yet." else "Nothing is owed either way.", color = Muted)
+        active.forEachIndexed { index, p ->
+            val mine = loans.filter { it.personId == p.id && outstanding(it.id, it.principal) > 0 }
             val iOwe = mine.filter { it.direction == "TAKEN" }.sumOf { outstanding(it.id, it.principal) }
             val theyOwe = mine.filter { it.direction == "GIVEN" }.sumOf { outstanding(it.id, it.principal) }
             val net = theyOwe - iOwe
-            val nextDue = mine.filter { it.dueDate != null && outstanding(it.id, it.principal) > 0 }.minByOrNull { it.dueDate ?: "" }?.dueDate
             Line(
-                p.name,
-                listOf(
-                    "Taken ${money(mine.filter { it.direction == "TAKEN" }.sumOf { it.principal })}",
-                    "given ${money(mine.filter { it.direction == "GIVEN" }.sumOf { it.principal })}",
-                    if (nextDue != null) "due ${fmtDate(nextDue)}" else "",
-                ).filter { it.isNotEmpty() }.joinToString(" · "),
-                when {
-                    net < 0 -> "You owe ${money(-net)}"
-                    net > 0 -> "Owes you ${money(net)}"
-                    else -> "Settled"
-                },
+                p.name, "",
+                when { net < 0 -> "You owe ${money(-net)}"; net > 0 -> "Owes you ${money(net)}"; else -> "Even" },
                 when { net < 0 -> Warn; net > 0 -> Teal; else -> Muted },
             )
             mine.forEach { l ->
+                val left = outstanding(l.id, l.principal)
+                val taken = l.direction == "TAKEN"
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Line(
-                        (if (l.direction == "TAKEN") "Borrowed " else "Lent ") + money(l.principal),
-                        fmtDate(l.date) + " · left " + money(outstanding(l.id, l.principal)) + if (l.note.isBlank()) "" else " · " + l.note,
+                        (if (taken) "Borrowed " else "Lent ") + money(l.principal),
+                        listOf(
+                            fmtDate(l.date),
+                            (if (taken) "paid back " else "got back ") + money(l.principal - left),
+                            "left " + money(left),
+                            if (l.dueDate != null) "due " + fmtDate(l.dueDate) else "",
+                            l.note,
+                        ).filter { it.isNotBlank() }.joinToString(" · "),
                         modifier = Modifier.weight(1f),
                     )
                     ConfirmButton("Delete", "Delete this loan of ${money(l.principal)} and its repayments? Use this for a wrong entry.") { scope.launch { app.repo.deleteLoan(l) } }
                 }
             }
-            HorizontalDivider()
+            if (index < active.size - 1) RowDivider()
         }
     }
-    Button(onClick = { nav.navigate("loanAdd") }, modifier = Modifier.fillMaxWidth()) { Text("Add loan entry") }
+
+    if (settled.isNotEmpty()) {
+        var showSettled by rememberSaveable { mutableStateOf(false) }
+        OutlinedButton(onClick = { showSettled = !showSettled }, modifier = Modifier.fillMaxWidth()) {
+            Text((if (showSettled) "Hide settled loans" else "Show settled loans") + " (${settled.size})  " + (if (showSettled) "▴" else "▾"))
+        }
+        if (showSettled) {
+            SectionCard("Settled") {
+                settled.forEachIndexed { index, l ->
+                    val p = persons.firstOrNull { it.id == l.personId }
+                    val taken = l.direction == "TAKEN"
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Line(
+                            (p?.name ?: "Someone") + " · " + (if (taken) "borrowed " else "lent ") + money(l.principal),
+                            fmtDate(l.date) + " · fully " + (if (taken) "paid back" else "returned to you"),
+                            "Settled", Muted, Modifier.weight(1f),
+                        )
+                        ConfirmButton("Delete", "Delete this settled loan of ${money(l.principal)} and its repayments?") { scope.launch { app.repo.deleteLoan(l) } }
+                    }
+                    if (index < settled.size - 1) RowDivider()
+                }
+            }
+        }
+    }
 }
 
 @Composable

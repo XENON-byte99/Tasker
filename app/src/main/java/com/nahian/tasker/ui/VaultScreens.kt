@@ -14,6 +14,17 @@ import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -147,12 +158,57 @@ fun UnlockForm() {
     }
 }
 
-/** Shown instead of the whole app when it is locked. */
+/** Shown instead of the whole app when it is locked: a full-screen welcome with one field. */
 @Composable
 fun LockScreen() {
-    Screen("Tasker is locked", accent = VaultColor, icon = Icons.Filled.Lock) {
-        UnlockForm()
-        Text("Reminders still arrive while Tasker is locked.", style = MaterialTheme.typography.bodySmall, color = Muted)
+    val app = taskerApp()
+    val ctx = LocalContext.current
+    val skin = Skins.current
+    var p by remember { mutableStateOf("") }
+    var show by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    fun tryUnlock() {
+        if (busy || p.isEmpty()) return
+        busy = true
+        app.ui.launch {
+            if (!Vault.unlock(ctx.applicationContext, p)) { error = "That password is not right. Try again."; p = "" }
+            busy = false
+        }
+    }
+    Box(Modifier.fillMaxSize().background(skin.bg).imePadding()) {
+        // Soft glows in the corners.
+        Box(Modifier.size(340.dp).align(Alignment.TopEnd).offset(x = 110.dp, y = (-110).dp).background(Brush.radialGradient(listOf(skin.accent.copy(alpha = 0.38f), Color.Transparent)), CircleShape))
+        Box(Modifier.size(380.dp).align(Alignment.BottomStart).offset(x = (-140).dp, y = 140.dp).background(Brush.radialGradient(listOf(VaultColor.copy(alpha = 0.30f), Color.Transparent)), CircleShape))
+        Column(
+            Modifier.align(Alignment.Center).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(Modifier.size(104.dp).clip(RoundedCornerShape(32.dp)).background(skin.hero), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Lock, contentDescription = null, tint = skin.onHero, modifier = Modifier.size(46.dp))
+            }
+            Text("Welcome back", color = skin.text, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
+            Text("Enter your master password to open Tasker", color = skin.muted, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+            OutlinedTextField(
+                value = p,
+                onValueChange = { p = it; error = "" },
+                label = { Text("Master password") },
+                singleLine = true,
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { tryUnlock() }),
+                trailingIcon = { TextButton(onClick = { show = !show }) { Text(if (show) "Hide" else "Show") } },
+            )
+            if (error.isNotEmpty()) Text(error, color = skin.warn, fontWeight = FontWeight.SemiBold)
+            Button(
+                onClick = { tryUnlock() }, enabled = !busy && p.isNotEmpty(),
+                shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().height(56.dp),
+            ) { Text(if (busy) "Checking…" else "Unlock", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+            Text("Your reminders keep arriving while Tasker is locked.", color = skin.muted, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+        }
     }
 }
 
