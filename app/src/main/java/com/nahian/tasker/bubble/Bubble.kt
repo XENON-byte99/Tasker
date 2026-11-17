@@ -24,6 +24,10 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.nahian.tasker.ui.Muted
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -265,8 +269,13 @@ class QuickActivity : ComponentActivity() {
                         colors = CardDefaults.cardColors(containerColor = Skins.current.card, contentColor = Skins.current.text),
                         modifier = Modifier.fillMaxWidth().clickable { },
                     ) {
-                        val module = intent.getStringExtra("module")
-                        if (module != null) FocusPanel(module) { finish() } else QuickPanel(
+                        // Opened from a badge: show just that type. Opened from the bubble: the full panel,
+                        // from which a type can be opened and closed again.
+                        val direct = remember { intent.getStringExtra("module") != null }
+                        var module by remember { mutableStateOf(intent.getStringExtra("module")) }
+                        val current = module
+                        if (current != null) FocusPanel(current) { if (direct) finish() else module = null } else QuickPanel(
+                            onFocus = { module = it },
                             onOpenApp = {
                                 startActivity(Intent(this@QuickActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                                 finish()
@@ -281,7 +290,7 @@ class QuickActivity : ComponentActivity() {
 }
 
 @Composable
-private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
+private fun QuickPanel(onFocus: (String) -> Unit, onOpenApp: () -> Unit, onClose: () -> Unit) {
     val app = taskerApp()
     val scope = app.ui
     val reminders by rememberFlow { app.dao.flowPendingReminders() }
@@ -292,6 +301,7 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
     var todo by remember { mutableStateOf("") }
     var quickNote by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
+    var form by remember { mutableStateOf("") }
     var openT by remember { mutableStateOf<TuitionSession?>(null) }
     var openC by remember { mutableStateOf<ClassSession?>(null) }
 
@@ -305,22 +315,38 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
             TextButton(onClick = onClose) { Text("Close") }
         }
 
-        val soon = reminders.filter { it.fireAt < System.currentTimeMillis() + 24 * 60 * 60_000L }.take(3)
-        if (soon.isEmpty()) Text("Nothing due in the next 24 hours.", style = MaterialTheme.typography.bodyMedium)
-        soon.forEach { r ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(r.title, fontWeight = FontWeight.SemiBold)
-                    Text(fmtMillis(r.fireAt), style = MaterialTheme.typography.bodySmall)
+        val soon = reminders.filter { it.fireAt < System.currentTimeMillis() + 24 * 60 * 60_000L }.take(4)
+        val first = soon.firstOrNull()
+        Column(
+            Modifier.fillMaxWidth().background(Skins.current.chipBg, RoundedCornerShape(16.dp)).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (first == null) {
+                Text("Nothing due in the next 24 hours.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Tag(first.module)
+                Text(first.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text(fmtMillis(first.fireAt) + if (first.body.isNotEmpty()) " · " + first.body else "", style = MaterialTheme.typography.bodySmall, color = Muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { scope.launch { app.repo.reminderDone(first) } }, modifier = Modifier.weight(1f)) { Text("Done") }
+                    OutlinedButton(onClick = { scope.launch { app.repo.snooze(first) } }, modifier = Modifier.weight(1f)) { Text("Snooze 10 min") }
                 }
-                OutlinedButton(onClick = { scope.launch { app.repo.reminderDone(r) } }) { Text("Done") }
             }
         }
 
-        RowDivider()
-        Text("TODAY AND THE NEXT 6 DAYS", style = MaterialTheme.typography.labelMedium)
-        DaysAgenda({ openT = it }, { openC = it }, { message = "Open the app to edit this to-do." })
+        // Six quick actions in a 3 x 2 grid.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            QuickTile("Expense", moduleColor("MONEY"), form == "EXPENSE", Modifier.weight(1f)) { form = if (form == "EXPENSE") "" else "EXPENSE" }
+            QuickTile("To-do", moduleColor("TASK"), form == "TODO", Modifier.weight(1f)) { form = if (form == "TODO") "" else "TODO" }
+            QuickTile("Note", Muted, form == "NOTE", Modifier.weight(1f)) { form = if (form == "NOTE") "" else "NOTE" }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            QuickTile("Tuition", moduleColor("TUITION"), false, Modifier.weight(1f)) { onFocus("TUITION") }
+            QuickTile("Class", moduleColor("CLASS"), false, Modifier.weight(1f)) { onFocus("CLASS") }
+            QuickTile("Prayer", moduleColor("PRAYER"), false, Modifier.weight(1f)) { onFocus("PRAYER") }
+        }
 
+        if (form == "EXPENSE") {
         Text("QUICK EXPENSE", style = MaterialTheme.typography.labelMedium)
         Field("Amount (৳)", amount, { amount = it }, number = true)
         Dropdown("Category", categories.map { it.id as Long? to it.name }, catId) { catId = it }
@@ -336,6 +362,8 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Add expense") }
 
+        }
+        if (form == "TODO") {
         Text("QUICK TO-DO", style = MaterialTheme.typography.labelMedium)
         Field("What to do", todo, { todo = it })
         Button(
@@ -348,6 +376,8 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Add to-do") }
 
+        }
+        if (form == "NOTE") {
         Text("QUICK NOTE", style = MaterialTheme.typography.labelMedium)
         Field("Write a note", quickNote, { quickNote = it })
         Button(
@@ -360,11 +390,35 @@ private fun QuickPanel(onOpenApp: () -> Unit, onClose: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Add note") }
 
+        }
         if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.primary)
+
+        if (soon.size > 1) {
+            Text("LATER", style = MaterialTheme.typography.labelMedium, color = Muted)
+            soon.drop(1).forEach { r ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(r.title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text(fmtMillis(r.fireAt), style = MaterialTheme.typography.bodySmall, color = Muted)
+                }
+            }
+        }
+
+        RowDivider()
+        Text("TODAY AND THE NEXT 6 DAYS", style = MaterialTheme.typography.labelMedium, color = Muted)
+        DaysAgenda({ openT = it }, { openC = it }, { message = "Open the app to edit this to-do." })
     }
 
     openT?.let { s -> TuitionSessionDialog(s) { openT = null } }
     openC?.let { s -> ClassSessionDialog(s) { openC = null } }
+}
+
+@Composable
+private fun QuickTile(label: String, color: Color, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick, modifier = modifier,
+        border = BorderStroke(if (selected) 2.dp else 1.dp, color),
+        contentPadding = PaddingValues(vertical = 14.dp, horizontal = 4.dp),
+    ) { Text(label, color = color, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelLarge) }
 }
 
 /** Opened from a coloured badge: shows only that kind of waiting item, with its answer buttons. */

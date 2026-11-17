@@ -78,7 +78,7 @@ fun CalendarScreen(nav: NavController, startKind: String) {
     fun good(s: String) = s == "DONE" || s == "ATTENDED"
 
     Screen("Calendar", onBack = { nav.popBackStack() }, accent = moduleColor(kind.let { if (it == "TUITION") "TUITION" else "CLASS" }), icon = Icons.Filled.DateRange) {
-        Choice(listOf("TUITION" to "Tuitions", "CLASS" to "Classes"), kind) { kind = it; filterId = 0L }
+        Segmented(listOf("TUITION" to "Tuitions", "CLASS" to "Classes"), kind) { kind = it; filterId = 0L }
         Dropdown(
             "Show",
             listOf(0L to (if (isTuition) "All tuitions together" else "All classes together")) +

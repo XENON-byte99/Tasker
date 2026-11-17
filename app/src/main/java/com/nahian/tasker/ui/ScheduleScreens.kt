@@ -65,7 +65,7 @@ private fun payLabel(t: Tuition): String = when (t.payModel) {
 fun ScheduleScreen(nav: NavController) {
     var tab by rememberSaveable { mutableStateOf("TUITIONS") }
     Screen("Schedule", accent = moduleColor("CLASS"), icon = Icons.Filled.DateRange) {
-        Choice(listOf("TUITIONS" to "Tuitions", "CLASSES" to "Classes"), tab) { tab = it }
+        Segmented(listOf("TUITIONS" to "Tuitions", "CLASSES" to "Classes"), tab) { tab = it }
         OutlinedButton(onClick = { nav.navigate("calendar/" + if (tab == "TUITIONS") "TUITION" else "CLASS") }, modifier = Modifier.fillMaxWidth()) { Text("Calendar view") }
         if (tab == "TUITIONS") TuitionsTab(nav) else ClassesTab(nav)
     }
@@ -93,7 +93,7 @@ private fun TuitionsTab(nav: NavController) {
     var editing by remember { mutableStateOf<TuitionSession?>(null) }
     var moving by remember { mutableStateOf<TuitionSession?>(null) }
     val start = date(today())
-    Choice((0..6).map { i -> start.plusDays(i.toLong()).let { it.toString() to (WEEKDAYS[it.dayOfWeek.value - 1] + " " + it.dayOfMonth) } }, day) { day = it }
+    DayStrip(day, { d -> sessions.count { it.date == d && it.status != "MOVED" } }) { day = it }
     val todays = sessions.filter { it.date == day && it.status != "MOVED" && tuitions.any { t -> t.id == it.tuitionId } }.sortedBy { it.startMin }
     if (todays.isEmpty()) Text("No tuition on this day.", color = Muted)
     todays.forEach { s ->
@@ -136,7 +136,7 @@ private fun TuitionsTab(nav: NavController) {
                     Teal,
                 )
                 if (t.payModel == "SET" && t.daysPerSet > 0) {
-                    LinearProgressIndicator(progress = { (done.toFloat() / t.daysPerSet).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                    if (t.daysPerSet <= 20) SegBar(done, t.daysPerSet, moduleColor("TUITION")) else LinearProgressIndicator(progress = { (done.toFloat() / t.daysPerSet).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
                 }
                 if (unpaid > 0) Text("Collect ${money(unpaid)}", color = Warn, fontWeight = FontWeight.SemiBold)
                 if (next != null) Text("Next: ${fmtDate(next.date)}, ${fmtTime(next.startMin)}", style = MaterialTheme.typography.bodySmall)
@@ -180,7 +180,7 @@ fun TuitionDetailScreen(nav: NavController, id: Long) {
                     style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
                 )
                 if (open.targetDays > 0) {
-                    LinearProgressIndicator(progress = { (done.toFloat() / open.targetDays).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                    if (open.targetDays <= 20) SegBar(done, open.targetDays, moduleColor("TUITION")) else LinearProgressIndicator(progress = { (done.toFloat() / open.targetDays).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
                 }
                 var note by remember(open.id) { mutableStateOf(open.note) }
                 Field("Note for this whole set", note, { note = it })
@@ -403,7 +403,7 @@ fun TuitionEditScreen(nav: NavController, id: Long) {
             Field("Minutes long", duration, { duration = it }, Modifier.weight(1f), number = true)
         }
         Text("Payment", style = MaterialTheme.typography.labelLarge)
-        Choice(listOf("SET" to "Per set of days", "MONTHLY" to "Monthly", "PER_DAY" to "Per day"), payModel) { payModel = it }
+        Segmented(listOf("SET" to "Per set", "MONTHLY" to "Monthly", "PER_DAY" to "Per day"), payModel) { payModel = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (payModel == "SET") Field("Days in a set", daysPerSet, { daysPerSet = it }, Modifier.weight(1f), number = true)
             Field("Fee (৳)", fee, { fee = it }, Modifier.weight(1f), number = true)
@@ -464,7 +464,7 @@ private fun ClassesTab(nav: NavController) {
     var moving by remember { mutableStateOf<ClassSession?>(null) }
 
     val start = date(today())
-    Choice((0..6).map { i -> start.plusDays(i.toLong()).let { it.toString() to (WEEKDAYS[it.dayOfWeek.value - 1] + " " + it.dayOfMonth) } }, day) { day = it }
+    DayStrip(day, { d -> sessions.count { it.date == d && it.status != "MOVED" } }) { day = it }
 
     val todays = sessions.filter { it.date == day && it.status != "MOVED" }.sortedBy { it.startMin }
     if (todays.isEmpty()) Text("No classes on this day.", color = Muted)
@@ -576,7 +576,7 @@ fun CourseEditScreen(nav: NavController, id: Long) {
                 TimeField("Ends", end, { end = it }, Modifier.weight(1f))
             }
             Field("Room", room, { room = it })
-            Choice(listOf("THEORY" to "Theory", "LAB" to "Lab"), type) { type = it }
+            Segmented(listOf("THEORY" to "Theory", "LAB" to "Lab"), type) { type = it }
             OutlinedButton(onClick = {
                 val s = parseTimeOrNull(start)
                 val e = parseTimeOrNull(end)

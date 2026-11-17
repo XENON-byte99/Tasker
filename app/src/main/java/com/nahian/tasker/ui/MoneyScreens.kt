@@ -48,7 +48,7 @@ import kotlinx.coroutines.launch
 fun MoneyScreen(nav: NavController) {
     var tab by rememberSaveable { mutableStateOf("EXPENSES") }
     Screen("Money", accent = moduleColor("MONEY"), icon = Icons.Filled.ShoppingCart) {
-        Choice(listOf("EXPENSES" to "Expenses", "LOANS" to "Loans", "INCOME" to "Income"), tab) { tab = it }
+        Segmented(listOf("EXPENSES" to "Expenses", "LOANS" to "Loans", "INCOME" to "Income"), tab) { tab = it }
         when (tab) {
             "EXPENSES" -> ExpensesTab(nav)
             "LOANS" -> LoansTab(nav)

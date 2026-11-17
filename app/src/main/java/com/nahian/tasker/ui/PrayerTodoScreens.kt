@@ -9,6 +9,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,6 +75,23 @@ fun PrayerScreen() {
     Screen("Prayer", accent = moduleColor("PRAYER"), icon = Icons.Filled.Star, actions = { TextButton(onClick = { editTimes = !editTimes }) { Text(if (editTimes) "Close" else "Times and alerts") } }) {
         Text(fmtDate(day), color = Muted)
 
+        // Next prayer, as the big card in the design.
+        val nowMin = com.nahian.tasker.core.nowMinutes()
+        val nextCfg = configs.filter { it.enabled }.firstOrNull { it.timeMin > nowMin } ?: configs.firstOrNull { it.enabled }
+        if (nextCfg != null) {
+            val skin = Skins.current
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape((skin.radius + 4).dp)).background(skin.hero).padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (nextCfg.timeMin > nowMin) "NEXT PRAYER" else "NEXT PRAYER · TOMORROW", color = skin.onHero, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text(nextCfg.prayer + " · " + fmtTime(nextCfg.timeMin), color = skin.onHero, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                }
+                Text("Reminder on", color = skin.onHero, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+
         if (editTimes) {
             val times = remember { mutableStateMapOf<String, String>() }
             val enabled = remember { mutableStateMapOf<String, Boolean>() }
@@ -112,18 +136,30 @@ fun PrayerScreen() {
         }
 
         SectionCard("Last 7 days", accent = moduleColor("PRAYER")) {
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            val skin = Skins.current
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 (6 downTo 0).forEach { back ->
                     val d = date(day).minusDays(back.toLong())
                     val n = logs.count { it.date == d.toString() && it.status != "MISSED" }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (back == 0) "Today" else WEEKDAYS[d.dayOfWeek.value - 1], style = MaterialTheme.typography.bodySmall, color = Muted)
-                        Text("$n/5", fontWeight = FontWeight.Bold, color = if (n == 5) Teal else if (n >= 3) MaterialTheme.colorScheme.onSurface else Warn)
+                    val shape = RoundedCornerShape(10.dp)
+                    val bg = when { back == 0 -> Color.Transparent; n == 5 -> moduleColor("PRAYER"); n >= 3 -> skin.accentBg; else -> skin.warnBg }
+                    val ink = when { back == 0 -> skin.text; n == 5 -> if (moduleColor("PRAYER").luminance() > 0.5f) Color.Black else Color.White; else -> skin.text }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(if (back == 0) "Today" else WEEKDAYS[d.dayOfWeek.value - 1], style = MaterialTheme.typography.labelSmall, color = Muted, maxLines = 1, softWrap = false)
+                        Box(
+                            Modifier.fillMaxWidth().clip(shape).background(bg).then(if (back == 0) Modifier.border(1.dp, moduleColor("PRAYER"), shape) else Modifier).padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("$n/5", fontWeight = FontWeight.Bold, color = ink, style = MaterialTheme.typography.labelLarge) }
                     }
                 }
             }
-            val missed = logs.count { it.status == "MISSED" }
-            if (missed > 0) Text("$missed marked missed this week, to make up.", color = Warn)
+        }
+
+        val weekDone = logs.count { it.status != "MISSED" }
+        val missed = logs.count { it.status == "MISSED" }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            Stat("This week", "$weekDone of 35", Modifier.weight(1f))
+            Stat("To make up", if (missed == 1) "1 prayer" else "$missed prayers", Modifier.weight(1f), if (missed > 0) Warn else Color.Unspecified)
         }
     }
 
@@ -340,7 +376,7 @@ fun TaskEditScreen(nav: NavController, id: Long) {
         Text("Repeat", style = MaterialTheme.typography.labelLarge)
         Choice(listOf("NONE" to "Never", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly"), repeat) { repeat = it }
         Text("Priority", style = MaterialTheme.typography.labelLarge)
-        Choice(listOf(0 to "Low", 1 to "Normal", 2 to "High"), priority) { priority = it }
+        Segmented(listOf(0 to "Low", 1 to "Normal", 2 to "High"), priority) { priority = it }
         SwitchRow("Keep popping up until done", persistent, "Needs a due date and time") { persistent = it }
         Field("Notes (optional)", notes, { notes = it })
         if (error.isNotEmpty()) Text(error, color = Warn)

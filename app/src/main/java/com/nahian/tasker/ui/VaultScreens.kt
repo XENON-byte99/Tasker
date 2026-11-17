@@ -181,7 +181,7 @@ private fun sizeLabel(bytes: Long): String = when {
 fun VaultScreen(nav: NavController) {
     var tab by rememberSaveable { mutableStateOf("PASSWORDS") }
     VaultGate(nav, "Vault") {
-        Choice(listOf("PASSWORDS" to "Passwords", "FILES" to "Files"), tab) { tab = it }
+        Segmented(listOf("PASSWORDS" to "Passwords", "FILES" to "Files"), tab) { tab = it }
         if (tab == "PASSWORDS") PasswordsTab(nav) else FilesTab()
         val ctx = LocalContext.current
         OutlinedButton(onClick = { Vault.lock(ctx.applicationContext) }, modifier = Modifier.fillMaxWidth()) { Text("Lock now") }

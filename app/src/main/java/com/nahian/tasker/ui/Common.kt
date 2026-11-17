@@ -4,6 +4,9 @@ package com.nahian.tasker.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -360,5 +363,87 @@ fun ConfirmButton(
             confirmButton = { TextButton(onClick = { asking = false; onConfirm() }) { Text(confirmLabel, color = Warn) } },
             dismissButton = { TextButton(onClick = { asking = false }) { Text("Cancel") } },
         )
+    }
+}
+
+/** A segmented control: one rounded track with the chosen option raised, as in the screen designs. */
+@Composable
+fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+    val skin = Skins.current
+    Row(
+        Modifier.fillMaxWidth().background(skin.chipBg, RoundedCornerShape(14.dp)).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        options.forEach { (value, label) ->
+            val on = value == selected
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) skin.card else Color.Transparent)
+                    .clickable { onSelect(value) }.padding(vertical = 10.dp, horizontal = 4.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, color = if (on) skin.accent else skin.muted,
+                )
+            }
+        }
+    }
+}
+
+/** Seven day tiles (weekday over date) with a dot on days that have something. */
+@Composable
+fun DayStrip(selected: String, counts: (String) -> Int = { 0 }, onSelect: (String) -> Unit) {
+    val skin = Skins.current
+    val start = LocalDate.now()
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (i in 0..6) {
+            val d = start.plusDays(i.toLong())
+            val ds = d.toString()
+            val on = ds == selected
+            val shape = RoundedCornerShape(16.dp)
+            val ink = if (on) skin.onHero else skin.text
+            Column(
+                Modifier.weight(1f).clip(shape)
+                    .then(if (on) Modifier.background(skin.hero) else Modifier.background(skin.card).border(1.dp, skin.border, shape))
+                    .clickable { onSelect(ds) }.padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(if (i == 0) "Today" else WEEKDAYS[d.dayOfWeek.value - 1], style = MaterialTheme.typography.labelSmall, color = ink, maxLines = 1, softWrap = false)
+                Text(d.dayOfMonth.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = ink)
+                Box(Modifier.size(6.dp).background(if (counts(ds) > 0) (if (on) skin.onHero else skin.accent) else Color.Transparent, CircleShape))
+            }
+        }
+    }
+}
+
+/** A progress bar cut into one segment per day, like "day 8 of 12". */
+@Composable
+fun SegBar(done: Int, total: Int, color: Color = Teal) {
+    val skin = Skins.current
+    val n = total.coerceIn(1, 31)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (i in 0 until n) {
+            Box(Modifier.weight(1f).height(10.dp).background(if (i < done) color else skin.chipBg, RoundedCornerShape(5.dp)))
+        }
+    }
+}
+
+/** A row of pills, filled for the ones that are done. Used for the five prayers. */
+@Composable
+fun PillRow(names: List<String>, done: Collection<String>, color: Color) {
+    val skin = Skins.current
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        names.forEach { n ->
+            val on = n in done
+            val shape = RoundedCornerShape(10.dp)
+            Box(
+                Modifier.weight(1f).clip(shape).then(if (on) Modifier.background(color) else Modifier.border(1.dp, skin.border, shape)).padding(vertical = 9.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(n, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
+                    color = if (on) (if (color.luminance() > 0.5f) Color.Black else Color.White) else skin.text)
+            }
+        }
     }
 }

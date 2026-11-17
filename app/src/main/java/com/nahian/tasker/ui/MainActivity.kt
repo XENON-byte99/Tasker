@@ -325,7 +325,7 @@ fun HomeScreen(nav: NavController) {
         val prayedToday = logs.filter { it.date == day && it.status != "MISSED" }.map { it.prayer }
         SectionCard("Prayers today · ${prayedToday.size} of ${PRAYERS.size}", accent = moduleColor("PRAYER")) {
             Tag("PRAYER")
-            Text(PRAYERS.joinToString("   ") { (if (it in prayedToday) "✓ " else "○ ") + it })
+            PillRow(PRAYERS, prayedToday, moduleColor("PRAYER"))
             OutlinedButton(onClick = { nav.navigate("prayer") }) { Text("Mark prayers") }
         }
 
@@ -337,7 +337,7 @@ fun HomeScreen(nav: NavController) {
             Stat("Balance", money(balance), Modifier.weight(1f).clickable { nav.navigate("money") })
         }
         Text("Design", style = MaterialTheme.typography.labelLarge, color = Muted)
-        Choice(Skins.all.map { it.id to it.label }, Skins.current.id) { app.prefs.setSkin(it) }
+        Segmented(Skins.all.map { it.id to it.label }, Skins.current.id) { app.prefs.setSkin(it) }
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text("Tasker build $build", color = Muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
             androidx.compose.material3.TextButton(onClick = { scope.launch { Updater.check(ctx) } }) { Text("Check for update") }

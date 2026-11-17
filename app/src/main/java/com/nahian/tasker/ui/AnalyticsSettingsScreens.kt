@@ -14,6 +14,15 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings as SettingsIcon
@@ -67,7 +76,7 @@ fun AnalyticsScreen(nav: NavController) {
     val days = (date(today()).toEpochDay() - date(from).toEpochDay() + 1).toInt()
 
     Screen("Analytics", onBack = { nav.popBackStack() }, accent = moduleColor("PRAYER"), icon = Icons.Filled.Info) {
-        Choice(listOf("WEEK" to "Last 7 days", "MONTH" to "This month", "YEAR" to "This year"), period) { period = it }
+        Segmented(listOf("WEEK" to "Last 7 days", "MONTH" to "This month", "YEAR" to "This year"), period) { period = it }
 
         val income = txns.filter { it.type == "INCOME" && it.date >= from }.sumOf { it.amount }
         val expense = txns.filter { it.type == "EXPENSE" && it.date >= from }.sumOf { it.amount }
@@ -87,12 +96,32 @@ fun AnalyticsScreen(nav: NavController) {
                 )
             }
             val top = rows.maxOf { maxOf(it.second, it.third) }.coerceAtLeast(1L)
-            rows.forEach { (m, inc, exp) ->
-                val name = LocalDate.parse("$m-01").format(DateTimeFormatter.ofPattern("MMM", Locale.US))
-                Text("$name · in ${money(inc)} · out ${money(exp)}", style = MaterialTheme.typography.bodySmall)
-                LinearProgressIndicator(progress = { inc.toFloat() / top }, modifier = Modifier.fillMaxWidth(), color = Teal)
-                LinearProgressIndicator(progress = { exp.toFloat() / top }, modifier = Modifier.fillMaxWidth(), color = Color(0xFFE0A15E))
+            val inColor = moduleColor("TUITION")
+            val outColor = Color(0xFFE0A15E)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(10.dp).background(inColor, RoundedCornerShape(2.dp))); Text("In", style = MaterialTheme.typography.labelMedium)
+                Box(Modifier.size(10.dp).background(outColor, RoundedCornerShape(2.dp))); Text("Out", style = MaterialTheme.typography.labelMedium)
             }
+            Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Bottom) {
+                rows.forEach { (_, inc, exp) ->
+                    Row(Modifier.weight(1f).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Bottom) {
+                        Box(Modifier.weight(1f).fillMaxHeight((inc.toFloat() / top).coerceIn(0.02f, 1f)).background(inColor, RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp)))
+                        Box(Modifier.weight(1f).fillMaxHeight((exp.toFloat() / top).coerceIn(0.02f, 1f)).background(outColor, RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp)))
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                rows.forEachIndexed { i, (m, _, _) ->
+                    Text(
+                        LocalDate.parse("$m-01").format(DateTimeFormatter.ofPattern("MMM", Locale.US)),
+                        style = MaterialTheme.typography.labelSmall, color = if (i == rows.size - 1) Skins.current.text else Muted,
+                        fontWeight = if (i == rows.size - 1) FontWeight.Bold else FontWeight.Normal,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            val last = rows.last()
+            Line("This month: in ${money(last.second)}, out ${money(last.third)}", trailing = money(last.second - last.third), trailingColor = if (last.second >= last.third) Teal else Warn)
         }
 
         SectionCard("Spending by category", accent = moduleColor("MONEY")) {
@@ -158,9 +187,24 @@ fun SettingsScreen(nav: NavController) {
     var hint by remember { mutableStateOf("") }
 
     Screen("Settings", onBack = { nav.popBackStack() }, accent = NoteColor, icon = Icons.Filled.SettingsIcon) {
+        // Profile card, as at the top of the Settings design.
+        SectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(48.dp).clip(CircleShape).background(Skins.current.hero), contentAlignment = Alignment.Center) {
+                    Text("T", color = Skins.current.onHero, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                }
+                Line(
+                    "Tasker",
+                    "Build ${Updater.currentBuild(ctx)} · ${Skins.current.label} design · " + (if (com.nahian.tasker.core.Vault.configured.value) "password on" else "no password yet"),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text("Everything is stored on this phone and works without internet.", style = MaterialTheme.typography.bodySmall, color = Muted)
+        }
+
         SectionCard("Design") {
             Text("Pick the look of the whole app. You can change it any time.", style = MaterialTheme.typography.bodySmall, color = Muted)
-            Choice(Skins.all.map { it.id to it.label }, Skins.current.id) { prefs.setSkin(it) }
+            Segmented(Skins.all.map { it.id to it.label }, Skins.current.id) { prefs.setSkin(it) }
         }
 
         ProtectionSettings(nav)

@@ -42,15 +42,7 @@ fun DaysAgenda(onTuition: (TuitionSession) -> Unit, onClass: (ClassSession) -> U
     fun classesOn(d: String) = cSessions.filter { it.date == d && it.status != "MOVED" }
     fun tasksOn(d: String) = tasks.filter { it.completedAt == null && it.dueDate == d }
 
-    Choice(
-        (0..6).map { i ->
-            val d = start.plusDays(i.toLong())
-            val ds = d.toString()
-            val n = tuitionsOn(ds).size + classesOn(ds).size + tasksOn(ds).size
-            ds to ((if (i == 0) "Today" else WEEKDAYS[d.dayOfWeek.value - 1] + " " + d.dayOfMonth) + if (n > 0) "  ● $n" else "")
-        },
-        day,
-    ) { day = it }
+    DayStrip(day, { d -> tuitionsOn(d).size + classesOn(d).size + tasksOn(d).size }) { day = it }
 
     val rows = ArrayList<AgendaRow>()
     tuitionsOn(day).forEach { s ->
