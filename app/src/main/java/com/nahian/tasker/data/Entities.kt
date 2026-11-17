@@ -96,6 +96,7 @@ data class Txn(
 data class ExpenseCategory(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
+    val parentId: Long? = null,         // null = main category, otherwise a sub-category of it
 )
 
 @Entity(tableName = "person")

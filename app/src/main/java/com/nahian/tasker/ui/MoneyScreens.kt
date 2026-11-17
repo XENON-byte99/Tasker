@@ -3,6 +3,7 @@
 package com.nahian.tasker.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -70,14 +71,28 @@ private fun ExpensesTab(nav: NavController) {
     val monthTotal = monthItems.sumOf { it.amount }
 
 
-    SectionCard("$month · by category", accent = moduleColor("MONEY")) {
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Eyebrow("$month · by category", Modifier.weight(1f))
+            TextButton(onClick = { nav.navigate("expenseCategories") }) { Text("Edit categories") }
+        }
         Text(money(monthTotal), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        val byCat = monthItems.groupBy { it.categoryId }.mapValues { e -> e.value.sumOf { it.amount } }.toList().sortedByDescending { it.second }
-        val top = byCat.firstOrNull()?.second ?: 0L
-        if (byCat.isEmpty()) Text("No expenses this month yet.", color = Muted)
-        byCat.forEach { (catId, sum) ->
-            Line(categories.firstOrNull { it.id == catId }?.name ?: "Uncategorised", trailing = money(sum))
+        // Totals per main category; sub-categories are listed underneath their main one.
+        val byMain = monthItems.groupBy { mainCategoryId(it.categoryId, categories) }
+            .mapValues { e -> e.value.sumOf { it.amount } }.toList().sortedByDescending { it.second }
+        val top = byMain.firstOrNull()?.second ?: 0L
+        if (byMain.isEmpty()) Text("No expenses this month yet.", color = Muted)
+        byMain.forEach { (mainId, sum) ->
+            Line(categoryName(mainId, categories), trailing = money(sum))
             LinearProgressIndicator(progress = { if (top == 0L) 0f else sum.toFloat() / top }, modifier = Modifier.fillMaxWidth())
+            val bySub = monthItems.filter { mainCategoryId(it.categoryId, categories) == mainId && it.categoryId != mainId }
+                .groupBy { it.categoryId }.mapValues { e -> e.value.sumOf { it.amount } }.toList().sortedByDescending { it.second }
+            bySub.forEach { (subId, subSum) ->
+                Row(Modifier.padding(start = 16.dp)) {
+                    Text("› " + (categories.firstOrNull { it.id == subId }?.name ?: ""), style = MaterialTheme.typography.bodySmall, color = Muted, modifier = Modifier.weight(1f))
+                    Text(money(subSum), style = MaterialTheme.typography.bodySmall, color = Muted)
+                }
+            }
         }
     }
 
@@ -96,8 +111,8 @@ private fun ExpensesTab(nav: NavController) {
         items.forEach { t ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Line(
-                    t.note.ifBlank { categories.firstOrNull { it.id == t.categoryId }?.name ?: "Expense" },
-                    categories.firstOrNull { it.id == t.categoryId }?.name ?: "",
+                    t.note.ifBlank { categoryName(t.categoryId, categories) },
+                    categoryName(t.categoryId, categories),
                     money(t.amount),
                     modifier = Modifier.weight(1f).clickable { nav.navigate("expenseEdit/${t.id}") },
                 )
@@ -119,7 +134,6 @@ fun ExpenseAddScreen(nav: NavController, id: Long = 0L) {
     var dateTxt by remember { mutableStateOf(today()) }
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
-    var newCat by remember { mutableStateOf<String?>(null) }
     var existing by remember { mutableStateOf<Txn?>(null) }
 
     LaunchedEffect(id) {
@@ -133,9 +147,7 @@ fun ExpenseAddScreen(nav: NavController, id: Long = 0L) {
     val saveAction = remember { Ref<() -> Unit>({}) }
     FormScreen(if (id == 0L) "New expense" else "Edit expense", onCancel = { nav.popBackStack() }, save = saveAction) {
         BigAmount(amount) { amount = it }
-        Text("Category", style = MaterialTheme.typography.labelLarge)
-        OptionGrid(categories.map { it.id as Long? to it.name }, catId ?: categories.firstOrNull()?.id, 3) { catId = it }
-        TextButton(onClick = { newCat = "" }) { Text("New category") }
+        CategoryPicker(categories, catId, { catId = it }, { nav.navigate("expenseCategories") })
         Text("Date", style = MaterialTheme.typography.labelLarge)
         OptionGrid(
             listOf(today() to "Today", date(today()).minusDays(1).toString() to "Yesterday"),
@@ -165,21 +177,6 @@ fun ExpenseAddScreen(nav: NavController, id: Long = 0L) {
         if (id == 0L) OutlinedButton(onClick = { save(false) }, modifier = Modifier.fillMaxWidth()) { Text("Save and add another") }
     }
 
-    newCat?.let { text ->
-        AlertDialog(
-            onDismissRequest = { newCat = null },
-            title = { Text("New category") },
-            text = { Field("Name", text, { newCat = it }) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val n = text.trim()
-                    if (n.isNotEmpty()) scope.launch { catId = app.dao.insertCategory(ExpenseCategory(name = n)) }
-                    newCat = null
-                }) { Text("Add") }
-            },
-            dismissButton = { TextButton(onClick = { newCat = null }) { Text("Cancel") } },
-        )
-    }
 }
 
 @Composable

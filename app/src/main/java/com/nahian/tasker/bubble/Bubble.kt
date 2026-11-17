@@ -77,6 +77,7 @@ import com.nahian.tasker.data.TuitionSession
 import com.nahian.tasker.ui.ClassSessionDialog
 import com.nahian.tasker.ui.DaysAgenda
 import com.nahian.tasker.ui.Dropdown
+import com.nahian.tasker.ui.categoryName
 import com.nahian.tasker.ui.TuitionSessionDialog
 import com.nahian.tasker.ui.Field
 import com.nahian.tasker.ui.Line
@@ -349,7 +350,7 @@ private fun QuickPanel(onFocus: (String) -> Unit, onOpenApp: () -> Unit, onClose
         if (form == "EXPENSE") {
         Text("QUICK EXPENSE", style = MaterialTheme.typography.labelMedium)
         Field("Amount (৳)", amount, { amount = it }, number = true)
-        Dropdown("Category", categories.map { it.id as Long? to it.name }, catId) { catId = it }
+        Dropdown("Category", categories.sortedBy { categoryName(it.id, categories) }.map { it.id as Long? to categoryName(it.id, categories) }, catId) { catId = it }
         Field("Note (optional)", note, { note = it })
         Button(
             onClick = {

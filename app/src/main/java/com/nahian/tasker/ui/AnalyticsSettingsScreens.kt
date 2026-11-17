@@ -161,12 +161,12 @@ fun AnalyticsScreen(nav: NavController) {
 
         SectionCard {
             Eyebrow("Spending by category")
-            val byCat = txns.filter { it.type == "EXPENSE" && it.date >= from }.groupBy { it.categoryId }
+            val byCat = txns.filter { it.type == "EXPENSE" && it.date >= from }.groupBy { mainCategoryId(it.categoryId, categories) }
                 .mapValues { e -> e.value.sumOf { it.amount } }.toList().sortedByDescending { it.second }
             val top = byCat.firstOrNull()?.second ?: 0L
             if (byCat.isEmpty()) Text("No expenses in this period.", color = Muted)
             byCat.forEach { (catId, sum) ->
-                Line(categories.firstOrNull { it.id == catId }?.name ?: "Uncategorised", trailing = money(sum))
+                Line(categoryName(catId, categories), trailing = money(sum))
                 LinearProgressIndicator(progress = { if (top == 0L) 0f else sum.toFloat() / top }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)), color = moduleColor("MONEY"))
             }
         }

@@ -18,11 +18,20 @@ import kotlinx.coroutines.flow.Flow
         PrayerConfig::class, PrayerLog::class,
         TaskCategory::class, Task::class, Reminder::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class Db : RoomDatabase() {
     abstract fun dao(): AppDao
+
+    companion object {
+        /** Version 2 adds sub-categories to expense categories. Existing data is kept as it is. */
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE expense_category ADD COLUMN parentId INTEGER")
+            }
+        }
+    }
 }
 
 @Dao
@@ -91,6 +100,10 @@ interface AppDao {
     @Query("SELECT * FROM txn ORDER BY date DESC, id DESC") fun flowTxns(): Flow<List<Txn>>
 
     @Insert suspend fun insertCategory(c: ExpenseCategory): Long
+    @Update suspend fun updateCategory(c: ExpenseCategory)
+    @Delete suspend fun deleteCategory(c: ExpenseCategory)
+    @Query("UPDATE txn SET categoryId = :to WHERE categoryId = :from") suspend fun moveExpenses(from: Long, to: Long?)
+    @Query("SELECT COUNT(*) FROM txn WHERE categoryId = :id") suspend fun countExpensesIn(id: Long): Int
     @Query("SELECT * FROM expense_category ORDER BY id") fun flowCategories(): Flow<List<ExpenseCategory>>
     @Query("SELECT COUNT(*) FROM expense_category") suspend fun countCategories(): Int
 

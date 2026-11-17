@@ -39,7 +39,7 @@ class TaskerApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        db = Room.databaseBuilder(this, Db::class.java, "tasker.db").build()
+        db = Room.databaseBuilder(this, Db::class.java, "tasker.db").addMigrations(Db.MIGRATION_1_2).build()
         notesDb = Room.databaseBuilder(this, NotesDb::class.java, "tasker_notes.db").build()
         vaultDb = Room.databaseBuilder(this, VaultDb::class.java, "tasker_vault.db").build()
         Vault.init(this)

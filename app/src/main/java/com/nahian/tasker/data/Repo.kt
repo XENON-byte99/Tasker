@@ -256,6 +256,24 @@ class Repo(private val ctx: Context, private val dao: AppDao, private val prefs:
         dao.insertTxn(Txn(date = date, amount = amount, type = "EXPENSE", categoryId = categoryId, note = note))
     }
 
+    /**
+     * Deletes an expense category. A sub-category's expenses move up to its main category.
+     * A main category takes its sub-categories with it, and their expenses become Uncategorised.
+     * No expense is ever deleted.
+     */
+    suspend fun deleteExpenseCategory(c: ExpenseCategory, all: List<ExpenseCategory>) {
+        if (c.parentId != null) {
+            dao.moveExpenses(c.id, c.parentId)
+        } else {
+            all.filter { it.parentId == c.id }.forEach { sub ->
+                dao.moveExpenses(sub.id, null)
+                dao.deleteCategory(sub)
+            }
+            dao.moveExpenses(c.id, null)
+        }
+        dao.deleteCategory(c)
+    }
+
     suspend fun addIncome(amount: Long, note: String, sourceType: String = "", sourceId: Long = 0) {
         dao.insertTxn(Txn(date = today(), amount = amount, type = "INCOME", note = note, sourceType = sourceType, sourceId = sourceId))
         val share = prefs.repayShare.intValue
